@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:15:10Z</date><groups><group><uuid>a571c0d144b14fd4a87a9d9b2aa9fcd6</uuid><name>Templates/Applications</name></group><group><uuid>36bff6c29af64692839d077febfc7079</uuid><name>Templates/Network devices</name></group></groups><templates><template><uuid>2fca6b60914b4fa98132b1a7885ab014</uuid><template>Cisco Meraki dashboard by HTTP</template><name>Cisco Meraki dashboard by HTTP</name><description>Template for monitoring Cisco Meraki dashboard https://meraki.cisco.com/products/meraki-dashboard/
+
+You can discuss this template or leave feedback on our forum https://www.zabbix.com/forum/zabbix-suggestions-and-feedback/
+
+Template tooling version used: 0.41</description><groups><group><name>Templates/Applications</name></group><group><name>Templates/Network devices</name></group></groups><items><item><uuid>d1a5f3c79a604bae98c314d2aed64ff4</uuid><name>Meraki: Get data</name><type>SCRIPT</type><key>meraki.get.data</key><delay>1h</delay><history>0</history><trends>0</trends><value_type>TEXT</value_type><params>var params = JSON.parse(value);
+
+var request = new HttpRequest();
+
+request.addHeader('X-Cisco-Meraki-API-Key:' + params.token);
+
+var response,
+    error_msg = '',
+    organizations = [],
+    devices = [];
+
+function getHttpData(url) {
+    response = request.get(url);
+    Zabbix.log(4, '[ Meraki API ] [ ' + url + ' ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+    if (response !== null) {
+        try {
+            response = JSON.parse(response);
+        }
+        catch (error) {
+            throw 'Failed to parse response received from Meraki API. Check debug log for more information.';
+        }
+    }
+
+    if (request.getStatus() !== 200) {
+        if (response.errors) {
+            throw response.errors.join(', ');
+        } else {
+            throw 'Failed to receive data: invalid response status code.';
+        }
+    }
+
+    if (typeof (response) !== 'object' || response === null) {
+        throw 'Cannot process response data: received data is not an object.';
+    }
+
+    return response;
+};
+
+try {
+
+    if (params.token === '{' + '$MERAKI.TOKEN}') {
+        throw 'Please change {' + '$MERAKI.TOKEN} macro with the proper value.';
+    }
+
+    if (params.url.indexOf('http://') === -1 &amp;&amp; params.url.indexOf('https://') === -1) {
+        params.url = 'https://' + params.url;
+    }
+
+    if (!params.url.endsWith('/')) {
+        params.url += '/';
+    }
+
+    if (typeof params.httpproxy !==  'undefined' &amp;&amp; params.httpproxy !== '') {
+        request.setProxy(params.httpproxy);
+    }
+
+    organizations = getHttpData(params.url + 'organizations');
+
+    if (Array.isArray(organizations) &amp;&amp; organizations.length &gt; 0) {
+        for (i in organizations) {
+            if ('id' in organizations[i]) {
+                organization_devices = getHttpData(params.url + 'organizations/' + encodeURIComponent(organizations[i].id) + '/devices');
+
+                if (Array.isArray(organization_devices) &amp;&amp; organization_devices.length &gt; 0) {
+                    for (j in organization_devices) {
+                        organization_devices[j].organizationId = organizations[i].id;
+
+                        devices.push(organization_devices[j]);
+                    }
+                }
+            }
+        }
+    }
+
+} catch (error) {
+    error_msg = error;
+};
+
+return JSON.stringify({
+  'organizations': organizations,
+  'devices': devices,
+  'error': error_msg.toString()
+});</params><description>Item for gathering all the organizations and devices from Meraki API.</description><timeout>60s</timeout><parameters><parameter><name>token</name><value>{$MERAKI.TOKEN}</value></parameter><parameter><name>url</name><value>{$MERAKI.API.URL}</value></parameter><parameter><name>httpproxy</name><value>{$MERAKI.HTTP_PROXY}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>6fdd764d820341e7bd2a24f42802c58a</uuid><name>Meraki: Data item errors</name><type>DEPENDENT</type><key>meraki.get.data.errors</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>TEXT</value_type><description>Item for gathering all the data item errors.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.error</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>meraki.get.data</key></master_item><tags><tag><tag>component</tag><value>error</value></tag></tags><triggers><trigger><uuid>2bf9355f548e4e9b9b8581fb43f175fe</uuid><expression>length(last(/Cisco Meraki dashboard by HTTP/meraki.get.data.errors))&gt;0</expression><name>Meraki: There are errors in 'Get data' metric</name><priority>WARNING</priority><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item></items><discovery_rules><discovery_rule><uuid>6488b49e692e4fe8b6a1c57f56b6ba7d</uuid><name>Devices discovery</name><type>DEPENDENT</type><key>meraki.devices.discovery</key><delay>0</delay><filter><conditions><condition><macro>{#NAME}</macro><value>{$MERAKI.DEVICE.NAME.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#NAME}</macro><value>{$MERAKI.DEVICE.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition></conditions></filter><host_prototypes><host_prototype><uuid>86d599f384d94b368508a170911213ec</uuid><host>{#NAME}</host><name>[{#PRODUCT_TYPE}] {#NAME}</name><group_links><group_link><group><name>Templates/Applications</name></group></group_link></group_links><templates><template><name>Cisco Meraki device by HTTP</name></template></templates><macros><macro><macro>{$MAC}</macro><value>{#MAC}</value><description>MAC address of the device.</description></macro><macro><macro>{$NETWORK.ID}</macro><value>{#NETWORK.ID}</value><description>Network ID of the device.</description></macro><macro><macro>{$ORGANIZATION_ID}</macro><value>{#ORGANIZATION_ID}</value><description>Organization ID of the device.</description></macro><macro><macro>{$SERIAL}</macro><value>{#SERIAL}</value><description>Serial number of the device.</description></macro></macros><tags><tag><tag>model</tag><value>{#MODEL}</value></tag><tag><tag>serial-number</tag><value>{#SERIAL}</value></tag></tags></host_prototype></host_prototypes><master_item><key>meraki.get.data</key></master_item><timeout>30s</timeout><lld_macro_paths><lld_macro_path><lld_macro>{#MAC}</lld_macro><path>$.mac</path></lld_macro_path><lld_macro_path><lld_macro>{#MODEL}</lld_macro><path>$.model</path></lld_macro_path><lld_macro_path><lld_macro>{#NAME}</lld_macro><path>$.name</path></lld_macro_path><lld_macro_path><lld_macro>{#NETWORK.ID}</lld_macro><path>$.networkId</path></lld_macro_path><lld_macro_path><lld_macro>{#ORGANIZATION_ID}</lld_macro><path>$.organizationId</path></lld_macro_path><lld_macro_path><lld_macro>{#PRODUCT_TYPE}</lld_macro><path>$.productType</path></lld_macro_path><lld_macro_path><lld_macro>{#SERIAL}</lld_macro><path>$.serial</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.devices</parameter></parameters></step></preprocessing></discovery_rule><discovery_rule><uuid>30f38d19659646009ca436d48f9598b0</uuid><name>Organizations discovery</name><type>DEPENDENT</type><key>meraki.organization.discovery</key><delay>0</delay><filter><conditions><condition><macro>{#NAME}</macro><value>{$MERAKI.ORGANIZATION.NAME.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#NAME}</macro><value>{$MERAKI.ORGANIZATION.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition></conditions></filter><host_prototypes><host_prototype><uuid>59cd2e995b814d7e9f8411dbc7420c76</uuid><host>{#NAME}</host><name>[{#REGION}] {#NAME}</name><group_links><group_link><group><name>Templates/Applications</name></group></group_link></group_links><group_prototypes><group_prototype><name>{#REGION}</name></group_prototype></group_prototypes><templates><template><name>Cisco Meraki organization by HTTP</name></template></templates><macros><macro><macro>{$ID}</macro><value>{#ID}</value><description>ID of the organization.</description></macro></macros></host_prototype></host_prototypes><master_item><key>meraki.get.data</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#ID}</lld_macro><path>$.id</path></lld_macro_path><lld_macro_path><lld_macro>{#NAME}</lld_macro><path>$.name</path></lld_macro_path><lld_macro_path><lld_macro>{#REGION}</lld_macro><path>$.cloud.region.name</path></lld_macro_path><lld_macro_path><lld_macro>{#URL}</lld_macro><path>$.url</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.organizations</parameter></parameters></step></preprocessing></discovery_rule></discovery_rules><tags><tag><tag>class</tag><value>network</value></tag><tag><tag>target</tag><value>cisco-meraki-dashboard</value></tag></tags><macros><macro><macro>{$MERAKI.API.URL}</macro><value>api.meraki.com/api/v1</value><description>Cisco Meraki Dashboard API URL. e.g api.meraki.com/api/v1</description></macro><macro><macro>{$MERAKI.DEVICE.NAME.MATCHES}</macro><value>.+</value><description>This macro is used in devices discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.DEVICE.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in devices discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.HTTP_PROXY}</macro><description>HTTP proxy for API requests. You can specify it using the format [protocol://][username[:password]@]proxy.example.com[:port]. See documentation at https://www.zabbix.com/documentation/6.0/manual/config/items/itemtypes/http</description></macro><macro><macro>{$MERAKI.ORGANIZATION.NAME.MATCHES}</macro><value>.+</value><description>This macro is used in organizations discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.ORGANIZATION.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in organizations discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.TOKEN}</macro><type>SECRET_TEXT</type><description>Cisco Meraki Dashboard API Token.</description></macro></macros></template></templates></zabbix_export>

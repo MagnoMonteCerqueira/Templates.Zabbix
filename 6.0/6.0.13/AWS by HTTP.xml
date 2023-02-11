@@ -1,0 +1,447 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:15:10Z</date><groups><group><uuid>a571c0d144b14fd4a87a9d9b2aa9fcd6</uuid><name>Templates/Applications</name></group><group><uuid>c2c162144c2d4c5491c8801193af4945</uuid><name>Templates/Cloud</name></group><group><uuid>748ad4d098d447d492bb935c907f652f</uuid><name>Templates/Databases</name></group><group><uuid>137f19e6e2dc4219b33553b812627bc2</uuid><name>Virtual machines</name></group></groups><templates><template><uuid>c60e5929ab474f67bbe67dc6b04e709d</uuid><template>AWS by HTTP</template><name>AWS by HTTP</name><description>Get AWS EC2, RDS and S3 instances. Don't forget to read the README.md for the correct setup of the template.
+
+You can discuss this template or leave feedback on our forum https://www.zabbix.com/forum/zabbix-suggestions-and-feedback
+
+Template tooling version used: 0.42</description><groups><group><name>Templates/Cloud</name></group></groups><discovery_rules><discovery_rule><uuid>c651911bad9244ad9c8d2dad5b0d70e4</uuid><name>EC2 instances discovery</name><type>SCRIPT</type><key>aws.ec2.discovery</key><delay>12h</delay><params>var AwsEC2 = {
+    params: {},
+
+    setParams: function (params) {
+        ['access_key', 'region', 'secret_key'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        AwsEC2.params = params;
+    },
+
+    sign: function (key, message) {
+        var hex = hmac('sha256', key, message);
+
+        if ((hex.length % 2) === 1) {
+            throw 'Invalid length of a hex string!';
+        }
+
+        var result = new Int8Array(hex.length / 2);
+        for (var i = 0, b = 0; i &lt; hex.length; i += 2, b++) {
+            result[b] = parseInt(hex.substring(i, i + 2), 16);
+        }
+
+        return result;
+    },
+
+    prepareParams: function (params) {
+        var result = [];
+
+        Object.keys(params).sort().forEach(function (key) {
+            if (typeof params[key] !== 'object') {
+                result.push(key + '=' + encodeURIComponent(params[key]));
+            }
+            else {
+                result.push(prepareObject(key, params[key]));
+            }
+        });
+
+        return result.join('&amp;');
+    },
+
+    request: function (method, region, service, host, params, data, uri) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var amzdate = (new Date()).toISOString().replace(/\.\d+Z/, 'Z').replace(/[-:]/g, ''),
+            date = amzdate.replace(/T\d+Z/, ''),
+
+            canonical_uri = '/' + uri,
+            canonical_headers = 'content-encoding:amz-1.0\n' + 'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n',
+            signed_headers = 'content-encoding;host;x-amz-date',
+            canonical_request = method + '\n' + canonical_uri + '\n' + params + '\n' + canonical_headers + '\n' + signed_headers + '\n' + sha256(data),
+            credential_scope = date + '/' + region + '/' + service + '/' + 'aws4_request',
+            request_string = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + credential_scope + '\n' + sha256(canonical_request),
+            key = AwsEC2.sign('AWS4' + AwsEC2.params.secret_key, date);
+
+        key = AwsEC2.sign(key, region);
+        key = AwsEC2.sign(key, service);
+        key = AwsEC2.sign(key, 'aws4_request');
+
+        var request = new HttpRequest(),
+            url = 'https://' + host + canonical_uri + '?' + params;
+
+        if (typeof AwsEC2.params.proxy !== 'undefined' &amp;&amp; AwsEC2.params.proxy !== '') {
+            request.setProxy(AwsEC2.params.proxy);
+        }
+        request.addHeader('x-amz-date: ' + amzdate);
+        request.addHeader('x-amz-content-sha256:' + sha256(data));
+        request.addHeader('Accept: application/json');
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Content-Encoding: amz-1.0');
+        request.addHeader('Authorization: ' + 'AWS4-HMAC-SHA256 Credential=' + AwsEC2.params.access_key + '/' + credential_scope + ', ' + 'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + hmac('sha256', key, request_string));
+
+        Zabbix.log(4, '[ AWS EC2 ] Sending request: ' + url);
+
+        response = request.post(url, data);
+
+        Zabbix.log(4, '[ AWS EC2 ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+        if (response !== null) {
+            try {
+                response = XML.toJson(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS CloudWatch API. Check debug log for more information.';
+            }
+        }
+
+        return JSON.parse(response);
+    },
+
+    tagToNameInstances: function (instance) {
+        if (!Array.isArray(instance))
+            instance = [instance];
+        instance.forEach(function (item, index, instance_array) {
+            if (typeof item !== 'object'
+                || typeof item.instancesSet !== 'object'
+                || typeof item.instancesSet.item !== 'object'
+                || item.instancesSet.item.hasOwnProperty('instanceId') === false)
+                throw 'Failed response parse. Check debug log for more information.';
+            var instanceName = item.instancesSet.item.instanceId
+            if (typeof item.instancesSet.item.tagSet === 'object'
+                &amp;&amp; typeof item.instancesSet.item.tagSet.item === 'object') {
+                if (!Array.isArray(item.instancesSet.item.tagSet.item))
+                  item.instancesSet.item.tagSet.item = [item.instancesSet.item.tagSet.item];
+                item.instancesSet.item.tagSet.item.forEach(
+                    function (tag) {
+                        if (tag.hasOwnProperty('key') &amp;&amp; tag.key === 'Name') {
+                            instanceName = tag.value;
+                        }
+                    }
+                );
+            }
+            instance_array[index]['instanceName'] = instanceName;
+        });
+
+        return instance;
+    },
+
+    listInstances: function () {
+        var payload = {};
+
+        payload['Action'] = 'DescribeInstances',
+            payload['Version'] = '2016-11-15'
+
+        result = AwsEC2.request('POST', AwsEC2.params.region, 'ec2', 'ec2.' + AwsEC2.params.region + '.amazonaws.com', AwsEC2.prepareParams(payload), '', '');
+
+        if (typeof result !== 'object'
+            || typeof result.DescribeInstancesResponse !== 'object'
+            || typeof result.DescribeInstancesResponse.reservationSet !== 'object') {
+            throw 'Cannot get EC2 instance list from AWS API. Check debug log for more information.';
+        }
+
+        if (result.DescribeInstancesResponse.reservationSet === null)
+            return [];
+
+        if (typeof result.DescribeInstancesResponse.reservationSet.item !== 'object')
+            throw 'Cannot get EC2 instance list from AWS API. Check debug log for more information.';
+
+        return AwsEC2.tagToNameInstances(result.DescribeInstancesResponse.reservationSet.item);
+    }
+};
+
+try {
+    AwsEC2.setParams(JSON.parse(value));
+
+    return JSON.stringify(AwsEC2.listInstances());
+}
+catch (error) {
+    error += (String(error).endsWith('.')) ? '' : '.';
+    Zabbix.log(3, '[ AWS EC2 ] ERROR: ' + error);
+    return JSON.stringify({ 'error': error });
+}</params><filter><evaltype>AND</evaltype><conditions><condition><macro>{#AWS.EC2.INSTANCE.NAME}</macro><value>{$AWS.EC2.LLD.FILTER.NAME.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#AWS.EC2.INSTANCE.NAME}</macro><value>{$AWS.EC2.LLD.FILTER.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition></conditions></filter><description>Get EC2 instances.</description><host_prototypes><host_prototype><uuid>c4c830c727294b07926c39b00cf19046</uuid><host>{#AWS.EC2.INSTANCE.ID}</host><name>{#AWS.EC2.INSTANCE.NAME}</name><group_links><group_link><group><name>Virtual machines</name></group></group_link></group_links><templates><template><name>AWS EC2 by HTTP</name></template></templates><macros><macro><macro>{$AWS.EC2.INSTANCE.ID}</macro><value>{#AWS.EC2.INSTANCE.ID}</value><description>EC2 instance ID.</description></macro></macros><custom_interfaces>YES</custom_interfaces><interfaces><interface><ip>{#AWS.EC2.INSTANCE.ID}</ip></interface></interfaces></host_prototype></host_prototypes><timeout>15s</timeout><parameters><parameter><name>access_key</name><value>{$AWS.ACCESS.KEY.ID}</value></parameter><parameter><name>secret_key</name><value>{$AWS.SECRET.ACCESS.KEY}</value></parameter><parameter><name>region</name><value>{$AWS.REGION}</value></parameter><parameter><name>proxy</name><value>{$AWS.PROXY}</value></parameter></parameters><lld_macro_paths><lld_macro_path><lld_macro>{#AWS.EC2.INSTANCE.ID}</lld_macro><path>$.instancesSet.item.instanceId</path></lld_macro_path><lld_macro_path><lld_macro>{#AWS.EC2.INSTANCE.NAME}</lld_macro><path>$.instanceName</path></lld_macro_path></lld_macro_paths></discovery_rule><discovery_rule><uuid>c1127e674b7548b2802cd8771f3a4768</uuid><name>RDS instances discovery</name><type>SCRIPT</type><key>aws.rds.discovery</key><delay>12h</delay><params>var AwsRDS = {
+    params: {},
+
+    setParams: function (params) {
+        ['access_key', 'region', 'secret_key'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        AwsRDS.params = params;
+    },
+
+    sign: function (key, message) {
+        var hex = hmac('sha256', key, message);
+
+        if ((hex.length % 2) === 1) {
+            throw 'Invalid length of a hex string!';
+        }
+
+        var result = new Int8Array(hex.length / 2);
+        for (var i = 0, b = 0; i &lt; hex.length; i += 2, b++) {
+            result[b] = parseInt(hex.substring(i, i + 2), 16);
+        }
+
+        return result;
+    },
+
+    prepareParams: function (params) {
+        var result = [];
+
+        Object.keys(params).sort().forEach(function (key) {
+            if (typeof params[key] !== 'object') {
+                result.push(key + '=' + encodeURIComponent(params[key]));
+            }
+            else {
+                result.push(prepareObject(key, params[key]));
+            }
+        });
+
+        return result.join('&amp;');
+    },
+
+    request: function (method, region, service, host, params, data, uri) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var amzdate = (new Date()).toISOString().replace(/\.\d+Z/, 'Z').replace(/[-:]/g, ''),
+            date = amzdate.replace(/T\d+Z/, ''),
+
+            canonical_uri = '/' + uri,
+            canonical_headers = 'content-encoding:amz-1.0\n' + 'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n',
+            signed_headers = 'content-encoding;host;x-amz-date',
+            canonical_request = method + '\n' + canonical_uri + '\n' + params + '\n' + canonical_headers + '\n' + signed_headers + '\n' + sha256(data),
+            credential_scope = date + '/' + region + '/' + service + '/' + 'aws4_request',
+            request_string = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + credential_scope + '\n' + sha256(canonical_request),
+            key = AwsRDS.sign('AWS4' + AwsRDS.params.secret_key, date);
+
+        key = AwsRDS.sign(key, region);
+        key = AwsRDS.sign(key, service);
+        key = AwsRDS.sign(key, 'aws4_request');
+
+        var request = new HttpRequest(),
+            url = 'https://' + host + canonical_uri + '?' + params;
+
+        if (typeof AwsRDS.params.proxy !== 'undefined' &amp;&amp; AwsRDS.params.proxy !== '') {
+            request.setProxy(AwsRDS.params.proxy);
+        }
+        request.addHeader('x-amz-date: ' + amzdate);
+        request.addHeader('x-amz-content-sha256:' + sha256(data));
+        request.addHeader('Accept: application/json');
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Content-Encoding: amz-1.0');
+        request.addHeader('Authorization: ' + 'AWS4-HMAC-SHA256 Credential=' + AwsRDS.params.access_key + '/' + credential_scope + ', ' + 'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + hmac('sha256', key, request_string));
+
+        Zabbix.log(4, '[ AWS RDS ] Sending request: ' + url);
+
+        response = request.post(url, data);
+
+        Zabbix.log(4, '[ AWS RDS ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        try {
+            response = JSON.parse(response);
+        }
+        catch (error) {
+            throw 'Failed to parse response received from AWS API. Check debug log for more information.';
+        }
+
+        return response;
+    },
+
+    listInstances: function () {
+        var payload = {};
+
+        payload['Action'] = 'DescribeDBInstances',
+            payload['Version'] = '2014-10-31'
+
+        result = AwsRDS.request('POST', AwsRDS.params.region, 'rds', 'rds.' + AwsRDS.params.region + '.amazonaws.com', AwsRDS.prepareParams(payload), '', '');
+
+        if (typeof result !== 'object'
+            || typeof result.DescribeDBInstancesResponse !== 'object'
+            || typeof result.DescribeDBInstancesResponse.DescribeDBInstancesResult !== 'object'
+            || typeof result.DescribeDBInstancesResponse.DescribeDBInstancesResult.DBInstances !== 'object') {
+            throw 'Cannot get DB instance list from AWS RDS API. Check debug log for more information.';
+        }
+        if (Array.isArray(result.DescribeDBInstancesResponse.DescribeDBInstancesResult.DBInstances))
+            return result.DescribeDBInstancesResponse.DescribeDBInstancesResult.DBInstances;
+        else
+            return [result.DescribeDBInstancesResponse.DescribeDBInstancesResult.DBInstances];
+
+    }
+};
+
+try {
+    AwsRDS.setParams(JSON.parse(value));
+
+    return JSON.stringify(AwsRDS.listInstances());
+}
+catch (error) {
+    error += (String(error).endsWith('.')) ? '' : '.';
+    Zabbix.log(3, '[ AWS RDS ] ERROR: ' + error);
+    return JSON.stringify({ 'error': error });
+}</params><filter><evaltype>AND</evaltype><conditions><condition><macro>{#AWS.RDS.INSTANCE.ID}</macro><value>{$AWS.RDS.LLD.FILTER.NAME.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#AWS.RDS.INSTANCE.ID}</macro><value>{$AWS.RDS.LLD.FILTER.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition></conditions></filter><description>Get RDS instances.</description><host_prototypes><host_prototype><uuid>799663c52a644f78aa3b3c14d4cc7235</uuid><host>{#AWS.RDS.INSTANCE.ID}</host><name>{#AWS.RDS.INSTANCE.ID}</name><group_links><group_link><group><name>Templates/Databases</name></group></group_link></group_links><templates><template><name>AWS RDS instance by HTTP</name></template></templates><macros><macro><macro>{$AWS.RDS.INSTANCE.ID}</macro><value>{#AWS.RDS.INSTANCE.ID}</value><description>RDS instance ID.</description></macro></macros><custom_interfaces>YES</custom_interfaces><interfaces><interface><ip>{#AWS.RDS.INSTANCE.ID}</ip></interface></interfaces></host_prototype></host_prototypes><timeout>15s</timeout><parameters><parameter><name>access_key</name><value>{$AWS.ACCESS.KEY.ID}</value></parameter><parameter><name>secret_key</name><value>{$AWS.SECRET.ACCESS.KEY}</value></parameter><parameter><name>region</name><value>{$AWS.REGION}</value></parameter><parameter><name>proxy</name><value>{$AWS.PROXY}</value></parameter></parameters><lld_macro_paths><lld_macro_path><lld_macro>{#AWS.RDS.INSTANCE.ID}</lld_macro><path>$.DBInstanceIdentifier</path></lld_macro_path></lld_macro_paths></discovery_rule><discovery_rule><uuid>ab6a97a108fb4dbc9fd1e07378721ffe</uuid><name>S3 buckets discovery</name><type>SCRIPT</type><key>aws.s3.discovery</key><delay>12h</delay><params>var AwsS3 = {
+    params: {},
+
+    setParams: function (params) {
+        ['access_key', 'secret_key'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        AwsS3.params = params;
+    },
+
+    sign: function (key, message) {
+        var hex = hmac('sha256', key, message);
+
+        if ((hex.length % 2) === 1) {
+            throw 'Invalid length of a hex string!';
+        }
+
+        var result = new Int8Array(hex.length / 2);
+        for (var i = 0, b = 0; i &lt; hex.length; i += 2, b++) {
+            result[b] = parseInt(hex.substring(i, i + 2), 16);
+        }
+
+        return result;
+    },
+
+    prepareParams: function (params) {
+        var result = [];
+
+        Object.keys(params).sort().forEach(function (key) {
+            if (typeof params[key] !== 'object') {
+                result.push(key + '=' + encodeURIComponent(params[key]));
+            }
+            else {
+                result.push(prepareObject(key, params[key]));
+            }
+        });
+
+        return result.join('&amp;');
+    },
+
+    request: function (method, region, service, host, params, data, uri) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var amzdate = (new Date()).toISOString().replace(/\.\d+Z/, 'Z').replace(/[-:]/g, ''),
+            date = amzdate.replace(/T\d+Z/, ''),
+
+            canonical_uri = '/' + uri,
+            canonical_headers = 'content-encoding:amz-1.0\n' + 'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n',
+            signed_headers = 'content-encoding;host;x-amz-date',
+            canonical_request = method + '\n' + canonical_uri + '\n' + params + '\n' + canonical_headers + '\n' + signed_headers + '\n' + sha256(data),
+            credential_scope = date + '/' + region + '/' + service + '/' + 'aws4_request',
+            request_string = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + credential_scope + '\n' + sha256(canonical_request),
+            key = AwsS3.sign('AWS4' + AwsS3.params.secret_key, date);
+
+        key = AwsS3.sign(key, region);
+        key = AwsS3.sign(key, service);
+        key = AwsS3.sign(key, 'aws4_request');
+
+        var request = new HttpRequest(),
+            url = 'https://' + host + canonical_uri + '?' + params;
+
+        if (typeof AwsS3.params.proxy !== 'undefined' &amp;&amp; AwsS3.params.proxy !== '') {
+            request.setProxy(AwsS3.params.proxy);
+        }
+        request.addHeader('x-amz-date: ' + amzdate);
+        request.addHeader('x-amz-content-sha256:' + sha256(data));
+        request.addHeader('Accept: application/json');
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Content-Encoding: amz-1.0');
+        request.addHeader('Authorization: ' + 'AWS4-HMAC-SHA256 Credential=' + AwsS3.params.access_key + '/' + credential_scope + ', ' + 'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + hmac('sha256', key, request_string));
+
+        Zabbix.log(4, '[ AWS S3 ] Sending request: ' + url);
+
+        response = request.get(url);
+
+        Zabbix.log(4, '[ AWS S3 ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+        if (response !== null) {
+            try {
+                response = XML.toJson(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS CloudWatch API. Check debug log for more information.';
+            }
+        }
+
+        return JSON.parse(response);
+    },
+
+    getBucketLocation: function (bucket_name) {
+        var payload = {};
+
+        payload['location'] = '',
+
+            result = AwsS3.request('GET', 'us-east-1', 's3', 's3.amazonaws.com', AwsS3.prepareParams(payload), '', bucket_name);
+
+        if (typeof result !== 'object'
+            || result.hasOwnProperty('LocationConstraint') === false
+        ) {
+            throw 'Cannot get buckets region location data from AWS S3 API. Check debug log for more information.';
+        }
+
+        return result.LocationConstraint !== null ? result.LocationConstraint : 'us-east-1';
+    },
+
+    listBuckets: function () {
+        var payload = {};
+
+        payload['Action'] = 'ListBuckets',
+            payload['Version'] = '2006-03-01',
+
+            result = AwsS3.request('GET', 'us-east-1', 's3', 's3.us-east-1.amazonaws.com', AwsS3.prepareParams(payload), '', '');
+        if (typeof result !== 'object'
+            || typeof result.ListAllMyBucketsResult !== 'object'
+            || typeof result.ListAllMyBucketsResult.Buckets !== 'object') {
+            throw 'Cannot get buckets list from AWS S3 API. Check debug log for more information.';
+        }
+        if (result.ListAllMyBucketsResult.Buckets === null)
+            return []
+        if (typeof result.ListAllMyBucketsResult.Buckets.Bucket !== 'object') {
+            throw 'Cannot get buckets list from AWS S3 API. Check debug log for more information.';
+        }
+
+        var buckets = [];
+        if (!Array.isArray(result.ListAllMyBucketsResult.Buckets.Bucket))
+            buckets = [result.ListAllMyBucketsResult.Buckets.Bucket]
+        else
+            buckets = result.ListAllMyBucketsResult.Buckets.Bucket
+        buckets.forEach(
+            function (bucket, index, buckets_array) {
+                if (!bucket.hasOwnProperty('Name'))
+                    throw 'Cannot get location for bucket. Check debug log for more information.';
+                buckets_array[index]['location'] = AwsS3.getBucketLocation(bucket['Name']);
+            });
+
+        return buckets;
+    }
+};
+
+try {
+    AwsS3.setParams(JSON.parse(value));
+
+    return JSON.stringify(AwsS3.listBuckets());
+}
+catch (error) {
+    error += (String(error).endsWith('.')) ? '' : '.';
+    Zabbix.log(3, '[ AWS S3 ] ERROR: ' + error);
+    return JSON.stringify({ 'error': error });
+}</params><filter><evaltype>AND</evaltype><conditions><condition><macro>{#AWS.S3.NAME}</macro><value>{$AWS.S3.LLD.FILTER.NAME.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#AWS.S3.NAME}</macro><value>{$AWS.S3.LLD.FILTER.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition></conditions></filter><description>Get S3 bucket instances.</description><host_prototypes><host_prototype><uuid>e45bd9810ea14718b17b875aad3fc544</uuid><host>{#AWS.S3.NAME}</host><name>{#AWS.S3.NAME}</name><group_links><group_link><group><name>Templates/Applications</name></group></group_link></group_links><group_prototypes><group_prototype><name>{#AWS.S3.REGION}</name></group_prototype></group_prototypes><templates><template><name>AWS S3 bucket by HTTP</name></template></templates><macros><macro><macro>{$AWS.REGION}</macro><value>{#AWS.S3.REGION}</value><description>Amazon S3 region code.</description></macro><macro><macro>{$AWS.S3.BUCKET.NAME}</macro><value>{#AWS.S3.NAME}</value><description>S3 bucket name.</description></macro><macro><macro>{$AWS.S3.FILTER.ID}</macro><value>1</value><description>S3 bucket requests filter identifier.</description></macro></macros><custom_interfaces>YES</custom_interfaces><interfaces><interface><ip>{#AWS.S3.NAME}</ip></interface></interfaces></host_prototype></host_prototypes><timeout>15s</timeout><parameters><parameter><name>access_key</name><value>{$AWS.ACCESS.KEY.ID}</value></parameter><parameter><name>secret_key</name><value>{$AWS.SECRET.ACCESS.KEY}</value></parameter><parameter><name>proxy</name><value>{$AWS.PROXY}</value></parameter></parameters><lld_macro_paths><lld_macro_path><lld_macro>{#AWS.S3.NAME}</lld_macro><path>$.Name</path></lld_macro_path><lld_macro_path><lld_macro>{#AWS.S3.REGION}</lld_macro><path>$.location</path></lld_macro_path></lld_macro_paths></discovery_rule></discovery_rules><tags><tag><tag>class</tag><value>software</value></tag><tag><tag>target</tag><value>aws</value></tag></tags><macros><macro><macro>{$AWS.ACCESS.KEY.ID}</macro><description>Access key ID.</description></macro><macro><macro>{$AWS.EC2.LLD.FILTER.NAME.MATCHES}</macro><value>.*</value><description>Filter of discoverable EC2 instances by namespace.</description></macro><macro><macro>{$AWS.EC2.LLD.FILTER.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>Filter to exclude discovered EC2 instances by namespace.</description></macro><macro><macro>{$AWS.PROXY}</macro><description>Sets HTTP proxy value. If this macro is empty then no proxy is used.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.NAME.MATCHES}</macro><value>.*</value><description>Filter of discoverable RDS instances by namespace.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>Filter to exclude discovered RDS instances by namespace.</description></macro><macro><macro>{$AWS.REGION}</macro><value>us-west-1</value><description>Amazon EC2 region code.</description></macro><macro><macro>{$AWS.S3.LLD.FILTER.NAME.MATCHES}</macro><value>.*</value><description>Filter of discoverable S3 buckets by namespace.</description></macro><macro><macro>{$AWS.S3.LLD.FILTER.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>Filter to exclude discovered S3 buckets by namespace.</description></macro><macro><macro>{$AWS.SECRET.ACCESS.KEY}</macro><type>SECRET_TEXT</type><description>Secret access key.</description></macro></macros></template></templates></zabbix_export>

@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:15:10Z</date><groups><group><uuid>a571c0d144b14fd4a87a9d9b2aa9fcd6</uuid><name>Templates/Applications</name></group></groups><templates><template><uuid>fa58228fee8a4e34a7c6503950d1c615</uuid><template>Azure by HTTP</template><name>Azure by HTTP</name><description>This template is designed to monitor Microsoft Azure by HTTP.
+It works without any external scripts and uses the script item.
+Currently the template supports discovery of virtual machines (VMs), MySQL and PostgreSQL servers.
+
+Setup:
+  1. Create an Azure service principal via the Azure command-line interface (Azure CLI) for your subscription.
+    `az ad sp create-for-rbac --name zabbix --role reader --scope /subscriptions/&lt;subscription_id&gt;`
+    See https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli for more details.
+  2. Link the template to a host.
+  3. Configure macros `{$AZURE.APP_ID}`, `{$AZURE.PASSWORD}`, `{$AZURE.TENANT_ID}`, and `{$AZURE.SUBSCRIPTION_ID}`.
+
+You can discuss this template or leave feedback on our forum https://www.zabbix.com/forum/zabbix-suggestions-and-feedback/
+
+Template tooling version used: 0.41</description><groups><group><name>Templates/Applications</name></group></groups><items><item><uuid>7b2fe9a7ee164718933eb456b0068fea</uuid><name>Azure: Get errors</name><type>DEPENDENT</type><key>azure.get.errors</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>TEXT</value_type><description>A list of errors from API requests.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.errors</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>azure.get.resources</key></master_item><tags><tag><tag>component</tag><value>raw</value></tag></tags><triggers><trigger><uuid>502cb582546046a29267715763c46bff</uuid><expression>length(last(/Azure by HTTP/azure.get.errors))&gt;0</expression><name>Azure: There are errors in requests to API</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>AVERAGE</priority><description>Zabbix has received errors in response to API requests.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>fb6abf3631b240b08357ea9ce9ba89a4</uuid><name>Azure: Get resources</name><type>SCRIPT</type><key>azure.get.resources</key><delay>10m</delay><history>0d</history><trends>0</trends><value_type>TEXT</value_type><params>var Azure = {
+    params: {},
+    token: null,
+
+    setParams: function (params) {
+        ['app_id', 'password', 'tenant_id', 'subscription_id'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: ' + field + '.';
+            }
+        });
+
+        Azure.params = params;
+    },
+
+    request: function (url, data) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var response, request = new HttpRequest();
+        if (Azure.token) {
+            request.addHeader('Accept: application/json');
+            request.addHeader('Authorization: Bearer ' + Azure.token);
+        }
+
+        Zabbix.log(4, '[ Azure ] Sending request: ' + url);
+
+        if (data !== '') {
+            request.addHeader('Content-Type: application/x-www-form-urlencoded');
+            response = request.post(url, data);
+        }
+        else {
+            response = request.get(url);
+        }
+
+        Zabbix.log(4, '[ Azure ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200 || response === null) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        try {
+            return JSON.parse(response);
+        }
+        catch (error) {
+            throw 'Failed to parse response received from API.';
+        }
+    },
+
+    nextlink: function (data) {
+        next_data = data;
+        while ('nextLink' in next_data) {
+            next_data = Azure.request(next_data.nextLink);
+            next_data.value.forEach(function (value) {
+                data.value.push(value);
+            });
+        }
+
+        return data;
+    }
+};
+
+var result,
+    data = {},
+    types = [
+        {&quot;method&quot;: &quot;Microsoft.Compute/virtualMachines&quot;, &quot;version&quot;: &quot;2022-03-01&quot;}, 
+        {&quot;method&quot;: &quot;Microsoft.DBforMySQL/flexibleServers&quot;, &quot;version&quot;: &quot;2021-05-01&quot;}, 
+        {&quot;method&quot;: &quot;Microsoft.DBforMySQL/servers&quot;, &quot;version&quot;: &quot;2017-12-01&quot;},
+        {&quot;method&quot;: &quot;Microsoft.DBforPostgreSQL/flexibleServers&quot;, &quot;version&quot;: &quot;2021-06-01&quot;},
+        {&quot;method&quot;: &quot;Microsoft.DBforPostgreSQL/servers&quot;, &quot;version&quot;: &quot;2017-12-01&quot;},
+        {&quot;method&quot;: &quot;Microsoft.Sql/servers&quot;, &quot;version&quot;: &quot;2022-05-01-preview&quot;}
+    ];
+    data['errors'] = {},
+    data['resources'] = {};
+    data.resources.value = [];
+
+try {
+    Azure.setParams(JSON.parse(value));
+
+    try {
+        result = Azure.request(
+                'https://login.microsoftonline.com/' + encodeURIComponent(Azure.params.tenant_id) +'/oauth2/token',
+                'grant_type=client_credentials&amp;resource=' + encodeURIComponent('https://management.azure.com/') + '&amp;client_id=' + encodeURIComponent(Azure.params.app_id) + '&amp;client_secret=' + encodeURIComponent(Azure.params.password)
+        );
+
+        if ('access_token' in result) {
+            Azure.token = result['access_token'];
+        } else {
+            throw 'Auth response does not contain access token.';
+        }
+    }
+    catch (error) {
+        data.errors.auth = error.toString();
+    }
+
+    if (!('auth' in data.errors)) {
+        try {
+            for (var i in types) {
+                if (types[i].method === &quot;Microsoft.Sql/servers&quot;) {
+                    mssql_servers = Azure.request('https://management.azure.com/subscriptions/' + encodeURIComponent(Azure.params.subscription_id) + '/providers/' + types[i].method + '?api-version=' + types[i].version);
+                    
+                    if ('nextLink' in mssql_servers) {
+                        mssql_servers = Azure.nextlink(mssql_servers);
+                    }
+                
+                    if ('value' in mssql_servers &amp;&amp; mssql_servers.value.length &gt; 0) {
+                        for (j in mssql_servers.value) {
+                            mssql_dbs = Azure.request('https://management.azure.com' + mssql_servers.value[j].id + '/databases?api-version=' + types[i].version);
+
+                            if ('nextLink' in mssql_dbs) {
+                                mssql_dbs = Azure.nextlink(mssql_dbs);
+                            }
+                        
+                            mssql_dbs.value.forEach(function (value) {
+                                raw_data.value.push(value);
+                            });
+                        }
+                    }
+                }
+                else {
+                    raw_data = Azure.request('https://management.azure.com/subscriptions/' + encodeURIComponent(Azure.params.subscription_id) + '/providers/' + types[i].method + '?api-version=' + types[i].version);
+
+                    if ('nextLink' in raw_data) {
+                        raw_data = Azure.nextlink(raw_data);
+                    }
+                }
+
+                raw_data.value.forEach(function (value) {
+                    value.resourceGroup = value.id.split(&quot;/&quot;)[4];
+                    data.resources.value.push(value);
+                });
+            }
+        }
+        catch (error) {
+            data.errors.resources = error.toString();
+        }
+    }
+}
+catch (error) {
+    data.errors.params = error.toString();
+}
+
+if (Object.keys(data.errors).length !== 0) {
+    errors = 'Failed to receive data:';
+    for (var error in data.errors) {
+        errors += '\n' + error + ' : ' + data.errors[error];
+    }
+    data.errors = errors;
+}
+else {
+    data.errors = '';
+}
+
+return JSON.stringify(data);</params><description>The result of API requests is expressed in the JSON.</description><timeout>{$AZURE.DATA.TIMEOUT}</timeout><parameters><parameter><name>app_id</name><value>{$AZURE.APP_ID}</value></parameter><parameter><name>password</name><value>{$AZURE.PASSWORD}</value></parameter><parameter><name>tenant_id</name><value>{$AZURE.TENANT_ID}</value></parameter><parameter><name>subscription_id</name><value>{$AZURE.SUBSCRIPTION_ID}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item></items><discovery_rules><discovery_rule><uuid>c875a410ddd84ccfbc5b407cd6e34803</uuid><name>Microsoft SQL databases discovery</name><type>DEPENDENT</type><key>azure.mssql.databases.discovery</key><delay>0</delay><filter><evaltype>AND</evaltype><conditions><condition><macro>{#TYPE}</macro><value>^Microsoft.Sql/servers/databases</value><formulaid>H</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.MSSQL.DB.NAME.MATCHES}</value><formulaid>E</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.MSSQL.DB.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>F</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.MSSQL.DB.LOCATION.MATCHES}</value><formulaid>C</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.MSSQL.DB.LOCATION.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>D</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.MATCHES}</value><formulaid>B</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>A</formulaid></condition><condition><macro>{#SIZE}</macro><value>{$AZURE.MSSQL.DB.SIZE.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>G</formulaid></condition></conditions></filter><description>The list of the Microsoft SQL databases is provided by the subscription.</description><host_prototypes><host_prototype><uuid>2aaf7dc7e9f04ccf9dd91fcd803fa076</uuid><host>Azure Microsoft SQL database {#NAME}</host><name>Azure Microsoft SQL database {#NAME}</name><group_links><group_link><group><name>Templates/Applications</name></group></group_link></group_links><macros><macro><macro>{$AZURE.RESOURCE_ID}</macro><value>{#ID}</value></macro></macros><tags><tag><tag>location</tag><value>{#LOCATION}</value></tag><tag><tag>resource-group</tag><value>{#GROUP}</value></tag><tag><tag>size</tag><value>{#SIZE}</value></tag><tag><tag>version</tag><value>{#VERSION}</value></tag></tags></host_prototype></host_prototypes><master_item><key>azure.get.resources</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#GROUP}</lld_macro><path>$.resourceGroup</path></lld_macro_path><lld_macro_path><lld_macro>{#ID}</lld_macro><path>$.id</path></lld_macro_path><lld_macro_path><lld_macro>{#LOCATION}</lld_macro><path>$.location</path></lld_macro_path><lld_macro_path><lld_macro>{#NAME}</lld_macro><path>$.name</path></lld_macro_path><lld_macro_path><lld_macro>{#SIZE}</lld_macro><path>$.sku.name</path></lld_macro_path><lld_macro_path><lld_macro>{#TYPE}</lld_macro><path>$.type</path></lld_macro_path><lld_macro_path><lld_macro>{#VERSION}</lld_macro><path>$.kind</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.resources.value</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>6h</parameter></parameters></step></preprocessing><overrides><override><name>Server</name><step>2</step><filter><conditions><condition><macro>{#VERSION}</macro><value>^((?!serverless).)*$</value><formulaid>A</formulaid></condition></conditions></filter><operations><operation><operationobject>HOST_PROTOTYPE</operationobject><operator>REGEXP</operator><templates><template><name>Azure Microsoft SQL database by HTTP</name></template></templates></operation></operations></override><override><name>Serverless</name><step>1</step><filter><conditions><condition><macro>{#VERSION}</macro><value>^.*serverless$</value><formulaid>A</formulaid></condition></conditions></filter><operations><operation><operationobject>HOST_PROTOTYPE</operationobject><operator>REGEXP</operator><templates><template><name>Azure Microsoft SQL serverless database by HTTP</name></template></templates></operation></operations></override></overrides></discovery_rule><discovery_rule><uuid>7fafbef68f8b46d083eb43da7cd1e2cc</uuid><name>MySQL servers discovery</name><type>DEPENDENT</type><key>azure.mysql.servers.discovery</key><delay>0</delay><filter><evaltype>AND</evaltype><conditions><condition><macro>{#TYPE}</macro><value>^Microsoft.DBforMySQL</value><formulaid>G</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.MYSQL.DB.NAME.MATCHES}</value><formulaid>E</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.MYSQL.DB.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>F</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.MYSQL.DB.LOCATION.MATCHES}</value><formulaid>C</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.MYSQL.DB.LOCATION.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>D</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.MATCHES}</value><formulaid>B</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>A</formulaid></condition></conditions></filter><description>The list of the MySQL servers is provided by the subscription.</description><host_prototypes><host_prototype><uuid>55b87078c14c4561b53e64af5ed77d61</uuid><host>Azure MySQL server {#NAME}</host><name>Azure MySQL server {#NAME}</name><group_links><group_link><group><name>Templates/Applications</name></group></group_link></group_links><macros><macro><macro>{$AZURE.RESOURCE_ID}</macro><value>{#ID}</value></macro></macros><tags><tag><tag>location</tag><value>{#LOCATION}</value></tag><tag><tag>resource-group</tag><value>{#GROUP}</value></tag><tag><tag>size</tag><value>{#SIZE}</value></tag><tag><tag>version</tag><value>{#VERSION}</value></tag></tags></host_prototype></host_prototypes><master_item><key>azure.get.resources</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#GROUP}</lld_macro><path>$.resourceGroup</path></lld_macro_path><lld_macro_path><lld_macro>{#ID}</lld_macro><path>$.id</path></lld_macro_path><lld_macro_path><lld_macro>{#LOCATION}</lld_macro><path>$.location</path></lld_macro_path><lld_macro_path><lld_macro>{#NAME}</lld_macro><path>$.name</path></lld_macro_path><lld_macro_path><lld_macro>{#SIZE}</lld_macro><path>$.sku.name</path></lld_macro_path><lld_macro_path><lld_macro>{#TYPE}</lld_macro><path>$.type</path></lld_macro_path><lld_macro_path><lld_macro>{#VERSION}</lld_macro><path>$.properties.version</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.resources.value</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>6h</parameter></parameters></step></preprocessing><overrides><override><name>Flexible server</name><step>1</step><filter><conditions><condition><macro>{#TYPE}</macro><value>Microsoft.DBforMySQL/flexibleServers</value><formulaid>A</formulaid></condition></conditions></filter><operations><operation><operationobject>HOST_PROTOTYPE</operationobject><operator>REGEXP</operator><templates><template><name>Azure MySQL flexible server by HTTP</name></template></templates></operation></operations></override><override><name>Single server</name><step>2</step><filter><conditions><condition><macro>{#TYPE}</macro><value>Microsoft.DBforMySQL/servers</value><formulaid>A</formulaid></condition></conditions></filter><operations><operation><operationobject>HOST_PROTOTYPE</operationobject><operator>REGEXP</operator><templates><template><name>Azure MySQL single server by HTTP</name></template></templates></operation></operations></override></overrides></discovery_rule><discovery_rule><uuid>a4b35b5fe8c04b52a9640f2f41013230</uuid><name>PostgreSQL servers discovery</name><type>DEPENDENT</type><key>azure.pgsql.servers.discovery</key><delay>0</delay><filter><evaltype>AND</evaltype><conditions><condition><macro>{#TYPE}</macro><value>^Microsoft.DBforPostgreSQL</value><formulaid>G</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.PGSQL.DB.NAME.MATCHES}</value><formulaid>E</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.PGSQL.DB.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>F</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.PGSQL.DB.LOCATION.MATCHES}</value><formulaid>C</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.PGSQL.DB.LOCATION.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>D</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.MATCHES}</value><formulaid>B</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>A</formulaid></condition></conditions></filter><description>The list of the PostgreSQL servers is provided by the subscription.</description><host_prototypes><host_prototype><uuid>54f0e0ec288f4feb9a2dc58a8726bd1d</uuid><host>Azure PostgreSQL server {#NAME}</host><name>Azure PostgreSQL server {#NAME}</name><group_links><group_link><group><name>Templates/Applications</name></group></group_link></group_links><macros><macro><macro>{$AZURE.RESOURCE_ID}</macro><value>{#ID}</value></macro></macros><tags><tag><tag>location</tag><value>{#LOCATION}</value></tag><tag><tag>resource-group</tag><value>{#GROUP}</value></tag><tag><tag>size</tag><value>{#SIZE}</value></tag><tag><tag>version</tag><value>{#VERSION}</value></tag></tags></host_prototype></host_prototypes><master_item><key>azure.get.resources</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#GROUP}</lld_macro><path>$.resourceGroup</path></lld_macro_path><lld_macro_path><lld_macro>{#ID}</lld_macro><path>$.id</path></lld_macro_path><lld_macro_path><lld_macro>{#LOCATION}</lld_macro><path>$.location</path></lld_macro_path><lld_macro_path><lld_macro>{#NAME}</lld_macro><path>$.name</path></lld_macro_path><lld_macro_path><lld_macro>{#SIZE}</lld_macro><path>$.sku.name</path></lld_macro_path><lld_macro_path><lld_macro>{#TYPE}</lld_macro><path>$.type</path></lld_macro_path><lld_macro_path><lld_macro>{#VERSION}</lld_macro><path>$.properties.version</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.resources.value</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>6h</parameter></parameters></step></preprocessing><overrides><override><name>Flexible server</name><step>1</step><filter><conditions><condition><macro>{#TYPE}</macro><value>Microsoft.DBforPostgreSQL/flexibleServers</value><formulaid>A</formulaid></condition></conditions></filter><operations><operation><operationobject>HOST_PROTOTYPE</operationobject><operator>REGEXP</operator><templates><template><name>Azure PostgreSQL flexible server by HTTP</name></template></templates></operation></operations></override><override><name>Single server</name><step>2</step><filter><conditions><condition><macro>{#TYPE}</macro><value>Microsoft.DBforPostgreSQL/servers</value><formulaid>A</formulaid></condition></conditions></filter><operations><operation><operationobject>HOST_PROTOTYPE</operationobject><operator>REGEXP</operator><templates><template><name>Azure PostgreSQL single server by HTTP</name></template></templates></operation></operations></override></overrides></discovery_rule><discovery_rule><uuid>f9386233186648ce828f406c52972ce5</uuid><name>Virtual machines discovery</name><type>DEPENDENT</type><key>azure.vm.discovery</key><delay>0</delay><filter><evaltype>AND</evaltype><conditions><condition><macro>{#TYPE}</macro><value>^Microsoft.Compute/virtualMachines$</value><formulaid>G</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.VM.NAME.MATCHES}</value><formulaid>E</formulaid></condition><condition><macro>{#NAME}</macro><value>{$AZURE.VM.NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>F</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.VM.LOCATION.MATCHES}</value><formulaid>C</formulaid></condition><condition><macro>{#LOCATION}</macro><value>{$AZURE.VM.LOCATION.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>D</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.MATCHES}</value><formulaid>B</formulaid></condition><condition><macro>{#GROUP}</macro><value>{$AZURE.RESOURCE_GROUP.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>A</formulaid></condition></conditions></filter><description>The list of the virtual machines is provided by the subscription.</description><host_prototypes><host_prototype><uuid>d08c0ee33c924b28bf1fed571da6c7f4</uuid><host>Azure virtual machine {#NAME}</host><name>Azure virtual machine {#NAME}</name><group_links><group_link><group><name>Templates/Applications</name></group></group_link></group_links><templates><template><name>Azure virtual machine by HTTP</name></template></templates><macros><macro><macro>{$AZURE.RESOURCE_ID}</macro><value>{#ID}</value></macro></macros><tags><tag><tag>location</tag><value>{#LOCATION}</value></tag><tag><tag>os</tag><value>{#OS}</value></tag><tag><tag>resource-group</tag><value>{#GROUP}</value></tag><tag><tag>size</tag><value>{#SIZE}</value></tag></tags></host_prototype></host_prototypes><master_item><key>azure.get.resources</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#GROUP}</lld_macro><path>$.resourceGroup</path></lld_macro_path><lld_macro_path><lld_macro>{#ID}</lld_macro><path>$.id</path></lld_macro_path><lld_macro_path><lld_macro>{#LOCATION}</lld_macro><path>$.location</path></lld_macro_path><lld_macro_path><lld_macro>{#NAME}</lld_macro><path>$.name</path></lld_macro_path><lld_macro_path><lld_macro>{#OS}</lld_macro><path>$.properties.storageProfile.osDisk.osType</path></lld_macro_path><lld_macro_path><lld_macro>{#SIZE}</lld_macro><path>$.properties.hardwareProfile.vmSize</path></lld_macro_path><lld_macro_path><lld_macro>{#TYPE}</lld_macro><path>$.type</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.resources.value</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>6h</parameter></parameters></step></preprocessing></discovery_rule></discovery_rules><tags><tag><tag>class</tag><value>software</value></tag><tag><tag>target</tag><value>azure</value></tag></tags><macros><macro><macro>{$AZURE.APP_ID}</macro><description>The AppID of Microsoft Azure.</description></macro><macro><macro>{$AZURE.DATA.TIMEOUT}</macro><value>15s</value><description>A response timeout for an API.</description></macro><macro><macro>{$AZURE.MSSQL.DB.LOCATION.MATCHES}</macro><value>.*</value><description>This macro is used in Microsoft SQL databases discovery rule.</description></macro><macro><macro>{$AZURE.MSSQL.DB.LOCATION.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in Microsoft SQL databases discovery rule.</description></macro><macro><macro>{$AZURE.MSSQL.DB.NAME.MATCHES}</macro><value>.*</value><description>This macro is used in Microsoft SQL databases discovery rule.</description></macro><macro><macro>{$AZURE.MSSQL.DB.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in Microsoft SQL databases discovery rule.</description></macro><macro><macro>{$AZURE.MSSQL.DB.SIZE.NOT_MATCHES}</macro><value>^System$</value><description>This macro is used in Microsoft SQL databases discovery rule.</description></macro><macro><macro>{$AZURE.MYSQL.DB.LOCATION.MATCHES}</macro><value>.*</value><description>This macro is used in MySQL servers discovery rule.</description></macro><macro><macro>{$AZURE.MYSQL.DB.LOCATION.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in MySQL servers discovery rule.</description></macro><macro><macro>{$AZURE.MYSQL.DB.NAME.MATCHES}</macro><value>.*</value><description>This macro is used in MySQL servers discovery rule.</description></macro><macro><macro>{$AZURE.MYSQL.DB.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in MySQL servers discovery rule.</description></macro><macro><macro>{$AZURE.PASSWORD}</macro><type>SECRET_TEXT</type><description>Microsoft Azure password.</description></macro><macro><macro>{$AZURE.PGSQL.DB.LOCATION.MATCHES}</macro><value>.*</value><description>This macro is used in PostgreSQL servers discovery rule.</description></macro><macro><macro>{$AZURE.PGSQL.DB.LOCATION.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in PostgreSQL servers discovery rule.</description></macro><macro><macro>{$AZURE.PGSQL.DB.NAME.MATCHES}</macro><value>.*</value><description>This macro is used in PostgreSQL servers discovery rule.</description></macro><macro><macro>{$AZURE.PGSQL.DB.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in PostgreSQL servers discovery rule.</description></macro><macro><macro>{$AZURE.RESOURCE_GROUP.MATCHES}</macro><value>.*</value><description>This macro is used in discovery rules.</description></macro><macro><macro>{$AZURE.RESOURCE_GROUP.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in discovery rules.</description></macro><macro><macro>{$AZURE.SUBSCRIPTION_ID}</macro><description>Microsoft Azure subscription ID.</description></macro><macro><macro>{$AZURE.TENANT_ID}</macro><description>Microsoft Azure tenant ID.</description></macro><macro><macro>{$AZURE.VM.LOCATION.MATCHES}</macro><value>.*</value><description>This macro is used in virtual machines discovery rule.</description></macro><macro><macro>{$AZURE.VM.LOCATION.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in virtual machines discovery rule.</description></macro><macro><macro>{$AZURE.VM.NAME.MATCHES}</macro><value>.*</value><description>This macro is used in virtual machines discovery rule.</description></macro><macro><macro>{$AZURE.VM.NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>This macro is used in virtual machines discovery rule.</description></macro></macros></template></templates></zabbix_export>

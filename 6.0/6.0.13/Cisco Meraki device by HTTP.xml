@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:15:10Z</date><groups><group><uuid>a571c0d144b14fd4a87a9d9b2aa9fcd6</uuid><name>Templates/Applications</name></group><group><uuid>36bff6c29af64692839d077febfc7079</uuid><name>Templates/Network devices</name></group></groups><templates><template><uuid>2cae7d2eeca04e6fa7419759ac9ad814</uuid><template>Cisco Meraki device by HTTP</template><name>Cisco Meraki device by HTTP</name><description>Template tooling version used: 0.41</description><groups><group><name>Templates/Applications</name></group><group><name>Templates/Network devices</name></group></groups><items><item><uuid>2280b9212c474d99835ec1334ff780eb</uuid><name>Meraki: public ip</name><type>DEPENDENT</type><key>meraki.device.public.ip</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Device public ip
+Network: {$NETWORK.ID} 
+MAC: {$MAC}</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.device[0].publicIp</parameter></parameters></step></preprocessing><master_item><key>meraki.get.device</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>324b748bfe2e4383927176046e246acb</uuid><name>Meraki: status</name><type>DEPENDENT</type><key>meraki.device.status</key><delay>0</delay><history>7d</history><description>Device operational status
+Network: {$NETWORK.ID} 
+MAC: {$MAC}</description><valuemap><name>Device status</name></valuemap><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.device[0].status</parameter></parameters></step><step><type>JAVASCRIPT</type><parameters><parameter>switch (value) {
+    case 'offline':
+        return 0
+    case 'online':
+        return 1
+    case 'dormant':
+        return 2
+    default:
+        return 10
+}</parameter></parameters></step></preprocessing><master_item><key>meraki.get.device</key></master_item><tags><tag><tag>component</tag><value>health</value></tag></tags><triggers><trigger><uuid>00583ac9e9824f7db22a1685421f0be9</uuid><expression>last(/Cisco Meraki device by HTTP/meraki.device.status)&lt;&gt;1</expression><name>Meraki: Status is not online</name><priority>WARNING</priority><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>e4963b68cdde453f91767ff9e3a31d16</uuid><name>Meraki: Get device data</name><type>SCRIPT</type><key>meraki.get.device</key><delay>3m</delay><history>0</history><trends>0</trends><value_type>TEXT</value_type><params>var params = JSON.parse(value);
+
+var request = new HttpRequest();
+
+request.addHeader('X-Cisco-Meraki-API-Key:' + params.token);
+
+var response,
+    error_msg = '',
+    device = [],
+    uplinksLL = [];
+
+function getHttpData(url) {
+    response = request.get(url);
+    Zabbix.log(4, '[ Meraki API ] [ ' + url + ' ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+    if (response !== null) {
+        try {
+            response = JSON.parse(response);
+        }
+        catch (error) {
+            throw 'Failed to parse response received from Meraki API. Check debug log for more information.';
+        }
+    }
+
+    if (request.getStatus() !== 200) {
+        if (response.errors) {
+            throw response.errors.join(', ');
+        } else {
+            throw 'Failed to receive data: invalid response status code.';
+        }
+    }
+
+    if (typeof (response) !== 'object' || response === null) {
+        throw 'Cannot process response data: received data is not an object.';
+    }
+
+    return response;
+};
+
+try {
+
+    if (params.token === '{' + '$MERAKI.TOKEN}') {
+        throw 'Please change {' + '$MERAKI.TOKEN} macro with the proper value.';
+    }
+
+    if (params.url.indexOf('http://') === -1 &amp;&amp; params.url.indexOf('https://') === -1) {
+        params.url = 'https://' + params.url;
+    }
+
+    if (!params.url.endsWith('/')) {
+        params.url += '/';
+    }
+
+    if (typeof params.httpproxy !==  'undefined' &amp;&amp; params.httpproxy !== '') {
+        request.setProxy(params.httpproxy);
+    }
+
+    device = getHttpData(params.url + 'organizations/' + encodeURIComponent(params.organizationId) + '/devices/statuses?serials[]=' + encodeURIComponent(params.serial));
+    uplinksLL = getHttpData(params.url + 'organizations/' + encodeURIComponent(params.organizationId) + '/devices/uplinksLossAndLatency?timespan=60');
+
+    if (uplinksLL.length &gt; 0) {
+        uplinks = uplinksLL.filter(function(device) {
+            return device.serial == params.serial;
+        });
+    }
+
+} catch (error) {
+    error_msg = error;
+};
+
+return JSON.stringify({
+    'device': device,
+    'uplinksLL': uplinks,
+    'error': error_msg.toString()
+});</params><description>Item for gathering device data from Meraki API.</description><timeout>60s</timeout><parameters><parameter><name>token</name><value>{$MERAKI.TOKEN}</value></parameter><parameter><name>url</name><value>{$MERAKI.API.URL}</value></parameter><parameter><name>organizationId</name><value>{$ORGANIZATION_ID}</value></parameter><parameter><name>httpproxy</name><value>{$MERAKI.HTTP_PROXY}</value></parameter><parameter><name>serial</name><value>{$SERIAL}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>b673516073354c9aaaf60cf3ce2e2fa6</uuid><name>Meraki: Device data item errors</name><type>DEPENDENT</type><key>meraki.get.device.errors</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>TEXT</value_type><description>Item for gathering errors of the device item.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.error</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>meraki.get.device</key></master_item><tags><tag><tag>component</tag><value>error</value></tag></tags><triggers><trigger><uuid>c8f8af6c92f14dc0bcdf426b124c7344</uuid><expression>length(last(/Cisco Meraki device by HTTP/meraki.get.device.errors))&gt;0</expression><name>Meraki: There are errors in 'Get Device data' metric</name><priority>WARNING</priority><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item></items><discovery_rules><discovery_rule><uuid>9c7e5d2ccad7416b8d58237be4218154</uuid><name>Uplinks loss and quality discovery</name><type>DEPENDENT</type><key>meraki.device.uplinks.discovery</key><delay>0</delay><filter><conditions><condition><macro>{#UPLINK}</macro><value>{$MERAKI.DEVICE.UPLINK.MATCHES}</value><formulaid>C</formulaid></condition><condition><macro>{#UPLINK}</macro><value>{$MERAKI.DEVICE.UPLINK.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>D</formulaid></condition><condition><macro>{#IP}</macro><value>{$MERAKI.DEVICE.LOSS.LATENCY.IP.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#IP}</macro><value>{$MERAKI.DEVICE.LOSS.LATENCY.IP.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition></conditions></filter><item_prototypes><item_prototype><uuid>abf642b1bb944d16bebf90dcf58dbd86</uuid><name>Uplink [{#IP}]: [{#UPLINK}]: Latency</name><type>DEPENDENT</type><key>meraki.device.latency[{#IP},{#UPLINK}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>Latency of the device uplink. 
+Network: {#NETWORK.ID}. 
+Device serial: {#SERIAL}.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.uplinksLL[?(@.ip == '{#IP}' &amp;&amp; @.uplink== '{#UPLINK}')].timeSeries.[0].latencyMs.first()</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler><error_handler_params>-1000</error_handler_params></step><step><type>MULTIPLIER</type><parameters><parameter>0.001</parameter></parameters></step></preprocessing><master_item><key>meraki.get.device</key></master_item><tags><tag><tag>component</tag><value>network</value></tag><tag><tag>ip</tag><value>{#IP}</value></tag><tag><tag>network</tag><value>{#NETWORK.ID}</value></tag><tag><tag>serial-number</tag><value>{#SERIAL}</value></tag><tag><tag>uplink</tag><value>{#UPLINK}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>b559ad94b15848089d89e85e4d9db7ff</uuid><expression>min(/Cisco Meraki device by HTTP/meraki.device.latency[{#IP},{#UPLINK}],#3)&gt;{$MERAKI.DEVICE.LATENCY}</expression><name>Uplink [{#IP}]: [{#UPLINK}]: latency &gt; {$MERAKI.DEVICE.LATENCY}</name><priority>WARNING</priority><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype><item_prototype><uuid>bded34f64113486ab0672210e5a8eb1d</uuid><name>Uplink [{#IP}]: [{#UPLINK}]: Loss, %</name><type>DEPENDENT</type><key>meraki.device.loss.pct[{#IP},{#UPLINK}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>Loss percent of the device uplink. 
+Network: {#NETWORK.ID}. 
+Device serial: {#SERIAL}.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.uplinksLL[?(@.ip == '{#IP}' &amp;&amp; @.uplink== '{#UPLINK}')].timeSeries.[0].lossPercent.first()</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler><error_handler_params>-1</error_handler_params></step></preprocessing><master_item><key>meraki.get.device</key></master_item><tags><tag><tag>component</tag><value>network</value></tag><tag><tag>ip</tag><value>{#IP}</value></tag><tag><tag>network</tag><value>{#NETWORK.ID}</value></tag><tag><tag>serial-number</tag><value>{#SERIAL}</value></tag><tag><tag>uplink</tag><value>{#UPLINK}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>1309e71025614ce4bb4242e6e291ae48</uuid><expression>min(/Cisco Meraki device by HTTP/meraki.device.loss.pct[{#IP},{#UPLINK}],#3)&gt;{$MERAKI.DEVICE.LOSS}</expression><name>Uplink [{#IP}]: [{#UPLINK}]: loss &gt; {$MERAKI.DEVICE.LOSS}%</name><priority>WARNING</priority><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype></item_prototypes><graph_prototypes><graph_prototype><uuid>4e9d84e08b32489c8c3a2cbbd4c6119a</uuid><name>Uplink [{#IP}]: [{#UPLINK}]: Latency</name><ymin_type_1>FIXED</ymin_type_1><graph_items><graph_item><color>1A7C11</color><item><host>Cisco Meraki device by HTTP</host><key>meraki.device.latency[{#IP},{#UPLINK}]</key></item></graph_item></graph_items></graph_prototype><graph_prototype><uuid>ebf262afc6d94d29b9831d418fb07edb</uuid><name>Uplink [{#IP}]: [{#UPLINK}]: Loss</name><ymin_type_1>FIXED</ymin_type_1><graph_items><graph_item><color>1A7C11</color><item><host>Cisco Meraki device by HTTP</host><key>meraki.device.loss.pct[{#IP},{#UPLINK}]</key></item></graph_item></graph_items></graph_prototype></graph_prototypes><master_item><key>meraki.get.device</key></master_item><timeout>30s</timeout><lld_macro_paths><lld_macro_path><lld_macro>{#IP}</lld_macro><path>$.ip</path></lld_macro_path><lld_macro_path><lld_macro>{#NETWORK.ID}</lld_macro><path>$.networkId</path></lld_macro_path><lld_macro_path><lld_macro>{#SERIAL}</lld_macro><path>$.serial</path></lld_macro_path><lld_macro_path><lld_macro>{#UPLINK}</lld_macro><path>$.uplink</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.uplinksLL</parameter></parameters></step></preprocessing></discovery_rule></discovery_rules><tags><tag><tag>class</tag><value>network</value></tag><tag><tag>target</tag><value>cisco-meraki-dashboard</value></tag></tags><macros><macro><macro>{$MERAKI.API.URL}</macro><value>api.meraki.com/api/v1</value><description>Cisco Meraki Dashboard API URL. e.g api.meraki.com/api/v1</description></macro><macro><macro>{$MERAKI.DEVICE.LATENCY}</macro><value>0.15</value><description>Devices uplink latency threshold in seconds.</description></macro><macro><macro>{$MERAKI.DEVICE.LOSS}</macro><value>15</value><description>Devices uplink loss threshold in percents.</description></macro><macro><macro>{$MERAKI.DEVICE.LOSS.LATENCY.IP.MATCHES}</macro><value>^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$</value><description>This macro is used in loss and latency checks discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.DEVICE.LOSS.LATENCY.IP.NOT_MATCHES}</macro><value>^$</value><description>This macro is used in loss and latency checks discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.DEVICE.UPLINK.MATCHES}</macro><value>.+</value><description>This macro is used in loss and latency checks discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.DEVICE.UPLINK.NOT_MATCHES}</macro><value>^$</value><description>This macro is used in loss and latency checks discovery. Can be overridden on the host or linked template level.</description></macro><macro><macro>{$MERAKI.HTTP_PROXY}</macro><description>HTTP proxy for API requests. You can specify it using the format [protocol://][username[:password]@]proxy.example.com[:port]. See documentation at https://www.zabbix.com/documentation/6.0/manual/config/items/itemtypes/http</description></macro><macro><macro>{$MERAKI.TOKEN}</macro><type>SECRET_TEXT</type><description>Cisco Meraki Dashboard API Token.</description></macro></macros><valuemaps><valuemap><uuid>24967dff65a048578eae18b2485907cb</uuid><name>Device status</name><mappings><mapping><value>0</value><newvalue>offline</newvalue></mapping><mapping><value>1</value><newvalue>online</newvalue></mapping><mapping><value>2</value><newvalue>dormant</newvalue></mapping><mapping><value>10</value><newvalue>unknown</newvalue></mapping></mappings></valuemap></valuemaps></template></templates></zabbix_export>

@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:14:46Z</date><groups><group><uuid>1d12408342854fd5a4436dd6d5d1bd4a</uuid><name>Templates/Telephony</name></group></groups><templates><template><uuid>30cc187a4e994c39b07f53d86b5cc6bc</uuid><template>Asterisk by HTTP</template><name>Asterisk by HTTP</name><description>The template gets Asterisk metrics from AMI by HTTP agent.
+You should enable the mini-HTTP Server, add the option webenabled=yes
+in the general section of the manager.conf file and create Asterisk Manager
+user with system and command write permissions within your Asterisk instance.
+Disable the PJSIP driver if you do not use PJSIP or do not have PJSIP endpoints.
+Please, define AMI address in the {$AMI.URL} macro. Also, the Zabbix host
+should have an Agent interface with the AMI address to check Asterisk service
+status.
+Then you can define {$AMI.USERNAME} and {$AMI.SECRET} macros in
+the template for using on the host level.
+If there are errors, increase the logging to debug level and see the Zabbix server log.
+
+You can discuss this template or leave feedback on our forum https://www.zabbix.com/forum/zabbix-suggestions-and-feedback/410060-discussion-thread-for-official-zabbix-template-asterisk
+
+Template tooling version used: 0.41</description><groups><group><name>Templates/Telephony</name></group></groups><items><item><uuid>72d074f6bb214ef9884d8cc4b1530ad3</uuid><name>Asterisk: Active calls</name><type>DEPENDENT</type><key>asterisk.active_calls</key><delay>0</delay><history>7d</history><description>The number of active calls at the moment.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.active_calls</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>calls</value></tag></tags></item><item><uuid>bb9ac1ac188b43239456477e13ae555f</uuid><name>Asterisk: Active channels</name><type>DEPENDENT</type><key>asterisk.active_channels</key><delay>0</delay><history>7d</history><description>The number of active channels at the moment.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.active_channels</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>channels</value></tag></tags></item><item><uuid>ccfc2a8a5880430196e2c874b66370ca</uuid><name>Asterisk: Calls processed</name><type>DEPENDENT</type><key>asterisk.calls_processed</key><delay>0</delay><history>7d</history><description>The number of calls processed after the last service restart.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.calls_processed</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>calls</value></tag></tags></item><item><uuid>196af875a190438abd8de5a6803a550f</uuid><name>Asterisk: Calls processed per second</name><type>DEPENDENT</type><key>asterisk.calls_processed.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of calls processed per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.calls_processed</parameter></parameters></step><step><type>CHANGE_PER_SECOND</type><parameters><parameter/></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>calls</value></tag></tags></item><item><uuid>7db3e9cdae3d4bffa7429617e351fce1</uuid><name>Asterisk: Get stats</name><type>HTTP_AGENT</type><key>asterisk.get_stats</key><history>0</history><trends>0</trends><value_type>TEXT</value_type><description>Asterisk system information in JSON format.</description><preprocessing><step><type>JAVASCRIPT</type><parameters><parameter>var Ami = {
+    params: {
+        url: '{$AMI.URL}',
+        trunk: '{$AMI.TRUNK_REGEXP}'
+    },
+    api_request: new HttpRequest(),
+
+    request: function (url, action) {
+        url += action;
+        Zabbix.log(4, '[ Asterisk ] Sending request: ' + url);
+        try {
+            response = Ami.api_request.get(url);
+        } catch (error) {
+            Zabbix.log(4, '[ Asterisk ] Get request returned error ' + error);
+            throw 'Get request returned error ' + error + '. Check debug log for more information.';
+        }
+        Zabbix.log(4, '[ Asterisk ] Received response with status code ' +
+            Ami.api_request.getStatus() + '\n' + response);
+
+        if (Ami.api_request.getStatus() !== 200) {
+            var message = 'Request failed with status code ' + Ami.api_request.getStatus();
+            if (response !== null) {
+                if (typeof response.message === 'string') {
+                    message += ': ' + response.message;
+                }
+            }
+
+            throw message + ' Check debug log for more information.';
+        }
+
+        var match = response.match('Response: (.+)');
+        if (match !== null &amp;&amp; match[1] !== 'Success' &amp;&amp; match[1] !== 'Goodbye' &amp;&amp; match[1] !== 'Follows') {
+            var responseText = match[1],
+                message = 'Request failed with message ' + match[1];
+
+            match = response.match('Message: (.+)');
+            if (match !== null &amp;&amp; match[1]) {
+                var responseMessage = match[1];
+                message += ': ' + match[1];
+            }
+            if (responseText !== 'Error' || responseMessage !== 'No endpoints found') {
+                throw message + '. Check debug log for more information.';
+            }
+        }
+
+        return {
+            status: Ami.api_request.getStatus(),
+            body: response
+        };
+    }
+};
+
+var asterisk = {
+    version: '',
+    uptime: 0,
+    uptime_reload: 0,
+    active_channels: 0,
+    active_calls: 0,
+    calls_processed: 0,
+    sip: {
+        trunks: [],
+        monitored_online: 0,
+        monitored_offline: 0,
+        unmonitored_online: 0,
+        unmonitored_offline: 0,
+        active_channels: 0,
+        total: 0
+    },
+    iax: {
+        trunks: [],
+        online: 0,
+        offline: 0,
+        unmonitored: 0,
+        active_channels: 0,
+        total: 0
+    },
+    pjsip: {
+        trunks: [],
+        available: 0,
+        unavailable: 0,
+        active_channels: 0,
+        total: 0
+    },
+    queue: {
+        queues: [],
+        total: 0
+    }
+};
+
+function block2Object(text) {
+    var parts = [],
+        dict = {};
+
+    text = text.replace(/^Output: /gm, '');
+
+    text.split('\n').forEach(function (line) {
+        parts = line.split(':');
+        if (parts.length &gt; 1) {
+            dict[parts.shift().trim()] = parts.join(':').trim();
+        }
+    })
+
+    return dict;
+}
+
+function text2Object(text) {
+    var blocks = text.split('\r\n\r\n'),
+        arr = [],
+        i = 1,
+        j = blocks.length - 2;
+
+    for (i; i &lt; j; i++) {
+        arr.push(block2Object(blocks[i]));
+    }
+
+    return arr;
+}
+
+function getSipPeers() {
+    var response = Ami.request(url, 'SIPpeers'),
+        elements = text2Object(response.body);
+    asterisk.sip.total = elements.length;
+    asterisk.sip.trunks = elements.filter(function (element) {
+        return element.ObjectName.search(Ami.params.trunk) != -1;
+    });
+    elements.forEach(function (element) {
+        if (element.IPaddress === '-none-') {
+            switch (element.Status) {
+                case 'Unmonitored':
+                    asterisk.sip.unmonitored_offline++;
+                    break;
+
+                case 'UNKNOWN':
+                    asterisk.sip.monitored_offline++;
+                    break;
+            }
+        }
+        else {
+            if (element.Status === 'Unmonitored') {
+                asterisk.sip.unmonitored_online++;
+            }
+            else {
+                asterisk.sip.monitored_online++;
+                if (element.Status.search('^OK') != -1) {
+                    element.Status = element.Status.split(' ')[0];
+                }
+            }
+        }
+    });
+    asterisk.sip.trunks.forEach(function (trunk) {
+        var active_channels = channels.match(new RegExp('[^!J]SIP/' + escapeChars(trunk.ObjectName), 'g'));
+        trunk.active_channels = (active_channels === null) ? 0 : active_channels.length;
+        asterisk.sip.active_channels += trunk.active_channels;
+    });
+}
+
+function getIaxPeerList() {
+    response = Ami.request(url, 'IAXpeerlist');
+    elements = text2Object(response.body);
+    asterisk.iax.total = elements.length;
+    asterisk.iax.trunks = elements.filter(function (element) {
+        return element.ObjectName.search(Ami.params.trunk) != -1;
+    });
+    elements.forEach(function (element) {
+        if (element.Status.search('^OK') != -1) {
+            element.Status = element.Status.split(' ')[0];
+        }
+        switch (element.Status) {
+            case 'Unmonitored':
+                asterisk.iax.unmonitored++;
+                break;
+
+            case 'UNKNOWN':
+                asterisk.iax.offline++;
+                break;
+        }
+    });
+    asterisk.iax.online = asterisk.iax.total - asterisk.iax.offline;
+    asterisk.iax.trunks.forEach(function (trunk) {
+        var active_channels = channels.match(new RegExp('[^!](IAX2/' + escapeChars(trunk.ObjectName) +
+            '|IAX2/' + escapeChars(trunk.ObjectUsername) + ')', 'g'));
+        trunk.active_channels = (active_channels === null) ? 0 : active_channels.length;
+        asterisk.iax.active_channels += trunk.active_channels;
+    });
+}
+
+function getPjsipShowEndpoints() {
+    response = Ami.request(url, 'PJSIPShowEndpoints');
+    elements = text2Object(response.body);
+    asterisk.pjsip.total = elements.length;
+    asterisk.pjsip.trunks = elements.filter(function (element) {
+        return element.ObjectName.search(Ami.params.trunk) != -1;
+    });
+
+    elements.forEach(function (element) {
+        if (element.DeviceState === 'Unavailable') {
+            asterisk.pjsip.unavailable++;
+        }
+    });
+    asterisk.pjsip.available = asterisk.pjsip.total - asterisk.pjsip.unavailable;
+    asterisk.pjsip.trunks.forEach(function (trunk) {
+        var active_channels = channels.match(new RegExp('[^!]PJSIP/' + escapeChars(trunk.ObjectName), 'g'));
+        trunk.active_channels = (active_channels === null) ? 0 : active_channels.length;
+        asterisk.pjsip.active_channels += trunk.active_channels;
+    });
+}
+
+function getQueueSummary() {
+    response = Ami.request(url, 'QueueSummary');
+    asterisk.queue.queues = text2Object(response.body);
+    asterisk.queue.total = asterisk.queue.queues.length;
+}
+
+function escapeChars(str) {
+    return str.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&amp;');
+}
+
+function getUptimeSeconds(text) {
+    var date = {
+        years: 0,
+        weeks: 0,
+        days: 0,
+        hours: 0,
+        minutes: 0,
+        seconds: 0
+    };
+
+    var fields = {
+        years: 'years?',
+        weeks: 'weeks?',
+        days: 'days?',
+        hours: 'hours?',
+        minutes: 'minutes?',
+        seconds: 'seconds?'
+    };
+
+    Object.keys(fields).forEach(function (field) {
+        var match = text.match('(\\d+) ' + fields[field]);
+        if (match !== null &amp;&amp; typeof match[1] !== 'undefined') {
+            date[field] = parseInt(match[1]);
+        }
+    });
+    return date.years * 220752000 + date.weeks * 604800 + date.days * 86400 +
+        date.hours * 3600 + date.minutes * 60 + date.seconds;
+}
+
+var cookie = value.match(/mansession_id=&quot;([0-9A-z]+)&quot;/);
+if (cookie == null) {
+    throw 'Cannot find mansession_id with cookie in response.';
+}
+
+var url = Ami.params.url.split('?')[0] + '?action=';
+
+Ami.api_request.addHeader('Cookie: mansession_id=&quot;' + cookie[1] + '&quot;');
+
+var response = Ami.request(url, 'CoreSettings');
+var coreSettings = block2Object(response.body);
+if (typeof coreSettings.AsteriskVersion !== 'undefined') {
+    asterisk.version = coreSettings.AsteriskVersion;
+}
+
+response = Ami.request(url, 'command&amp;command=core%20show%20uptime');
+var uptime = block2Object(response.body);
+if (typeof uptime[&quot;System uptime&quot;] !== 'undefined') {
+    asterisk.uptime = getUptimeSeconds(uptime[&quot;System uptime&quot;]);
+}
+if (typeof uptime[&quot;Last reload&quot;] !== 'undefined') {
+    asterisk.uptime_reload = getUptimeSeconds(uptime[&quot;Last reload&quot;]);
+}
+
+response = Ami.request(url, 'command&amp;command=core%20show%20channels%20count');
+channels = response.body;
+var fields = {
+    active_channels: 'active channels?',
+    active_calls: 'active calls?',
+    calls_processed: 'calls? processed'
+};
+
+Object.keys(fields).forEach(function (field) {
+    var match = channels.match('(\\d+) ' + fields[field]);
+    if (match !== null &amp;&amp; typeof match[1] !== 'undefined') {
+        asterisk[field] = parseInt(match[1]);
+    }
+});
+
+response = Ami.request(url, 'command&amp;command=core%20show%20channels%20concise');
+channels = response.body;
+
+response = Ami.request(url, 'ListCommands');
+var list = response.body;
+if (list.includes('SIPpeers')) {
+    getSipPeers();
+}
+if (list.includes('IAXpeerlist')) {
+    getIaxPeerList();
+}
+if (list.includes('PJSIPShowEndpoints')) {
+    getPjsipShowEndpoints();
+}
+if (list.includes('QueueSummary')) {
+    getQueueSummary();
+}
+
+try {
+    response = Ami.request(url, 'Logoff');
+}
+catch (e) {}
+
+return JSON.stringify(asterisk);</parameter></parameters></step></preprocessing><url>{$AMI.URL}</url><query_fields><query_field><name>action</name><value>login</value></query_field><query_field><name>username</name><value>{$AMI.USERNAME}</value></query_field><query_field><name>secret</name><value>{$AMI.SECRET}</value></query_field></query_fields><retrieve_mode>HEADERS</retrieve_mode><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>d9900a1f096a4b89a2aa4af89f30b2cc</uuid><name>Asterisk: IAX trunks active channels</name><type>DEPENDENT</type><key>asterisk.iax.active_channels</key><delay>0</delay><history>7d</history><description>The total number of IAX trunks active channels.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.active_channels</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>channels</value></tag></tags><triggers><trigger><uuid>0ae0a5b6123a42dd9722219e5e5839df</uuid><expression>min(/Asterisk by HTTP/asterisk.iax.active_channels,10m)&gt;={$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;IAX&quot;}</expression><name>Asterisk: Total number of active channels of IAX trunks is too high</name><event_name>Asterisk: Total number of active channels of IAX trunks is too high (over {$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;IAX&quot;} for 10m)</event_name><priority>WARNING</priority><description>The IAX trunks may not be able to process new calls.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>0798cf46d82041e6a7091698c7693ec5</uuid><name>Asterisk: IAX offline peers</name><type>DEPENDENT</type><key>asterisk.iax.offline</key><delay>0</delay><history>7d</history><description>The number of offline IAX peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.offline</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>bf741f5560734530be352341071c5984</uuid><name>Asterisk: IAX online peers</name><type>DEPENDENT</type><key>asterisk.iax.online</key><delay>0</delay><history>7d</history><description>The number of online IAX peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.online</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>ccb62e9b41da4f20b4ab19e4eecd598b</uuid><name>Asterisk: IAX peers</name><type>DEPENDENT</type><key>asterisk.iax.total</key><delay>0</delay><history>7d</history><description>The total number of IAX peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.total</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>cf5c07c1a09b4a10af21292b876fcb20</uuid><name>Asterisk: IAX unmonitored peers</name><type>DEPENDENT</type><key>asterisk.iax.unmonitored</key><delay>0</delay><history>7d</history><description>The number of unmonitored IAX peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.unmonitored</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>5ae6135a49764db7b496f5d2378ddd77</uuid><name>Asterisk: PJSIP trunks active channels</name><type>DEPENDENT</type><key>asterisk.pjsip.active_channels</key><delay>0</delay><history>7d</history><description>The total number of PJSIP trunks active channels.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pjsip.active_channels</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>channels</value></tag></tags><triggers><trigger><uuid>9b158fe0efb4416cb6ad5d53b38c3e38</uuid><expression>min(/Asterisk by HTTP/asterisk.pjsip.active_channels,10m)&gt;={$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;PJSIP&quot;}</expression><name>Asterisk: Total number of active channels of PJSIP trunks is too high</name><event_name>Asterisk: Total number of active channels of PJSIP trunks is too high (over {$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;PJSIP&quot;} for 10m)</event_name><priority>WARNING</priority><description>The PJSIP trunks may not be able to process new calls.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>cc07f186104842aabec3d26dcd4322d2</uuid><name>Asterisk: PJSIP available endpoints</name><type>DEPENDENT</type><key>asterisk.pjsip.available</key><delay>0</delay><history>7d</history><description>The number of available PJSIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pjsip.available</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>fdc888cb355a4b738be8a77354a7ce76</uuid><name>Asterisk: PJSIP endpoints</name><type>DEPENDENT</type><key>asterisk.pjsip.total</key><delay>0</delay><history>7d</history><description>The total number of PJSIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pjsip.total</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>5c10fe1a4bfb4628be20137d0f1ec725</uuid><name>Asterisk: PJSIP unavailable endpoints</name><type>DEPENDENT</type><key>asterisk.pjsip.unavailable</key><delay>0</delay><history>7d</history><description>The number of unavailable PJSIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pjsip.unavailable</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>2df0dca89a744e86b4f5a2cec673d427</uuid><name>Asterisk: SIP trunks active channels</name><type>DEPENDENT</type><key>asterisk.sip.active_channels</key><delay>0</delay><history>7d</history><description>The total number of SIP trunks active channels.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.active_channels</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>channels</value></tag></tags><triggers><trigger><uuid>d2fde5d26d284a129346a12ba0949b60</uuid><expression>min(/Asterisk by HTTP/asterisk.sip.active_channels,10m)&gt;={$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;SIP&quot;}</expression><name>Asterisk: Total number of active channels of SIP trunks is too high</name><event_name>Asterisk: Total number of active channels of SIP trunks is too high (over {$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;SIP&quot;} for 10m)</event_name><priority>WARNING</priority><description>The SIP trunks may not be able to process new calls.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>fb08ec8d143a41a097f8652c8261bad8</uuid><name>Asterisk: SIP monitored offline</name><type>DEPENDENT</type><key>asterisk.sip.monitored_offline</key><delay>0</delay><history>7d</history><description>The number of monitored offline SIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.monitored_offline</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>23744b0a04b54637a7dbe1c7f8f5200f</uuid><name>Asterisk: SIP monitored online</name><type>DEPENDENT</type><key>asterisk.sip.monitored_online</key><delay>0</delay><history>7d</history><description>The number of monitored online SIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.monitored_online</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>fb78998a342942ac942a7e1632b98208</uuid><name>Asterisk: SIP peers</name><type>DEPENDENT</type><key>asterisk.sip.total</key><delay>0</delay><history>7d</history><description>The total number of SIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.total</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>ae21f8c13063402d9eece400a18c6167</uuid><name>Asterisk: SIP unmonitored offline</name><type>DEPENDENT</type><key>asterisk.sip.unmonitored_offline</key><delay>0</delay><history>7d</history><description>The number of unmonitored offline SIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.unmonitored_offline</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>1cd5fb5232ca4f4398f85d959ac11b2c</uuid><name>Asterisk: SIP unmonitored online</name><type>DEPENDENT</type><key>asterisk.sip.unmonitored_online</key><delay>0</delay><history>7d</history><description>The number of unmonitored online SIP peers.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.unmonitored_online</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>peers</value></tag></tags></item><item><uuid>9c64cb54c2c541c1862558dcf8c6e3a3</uuid><name>Asterisk: Total queues</name><type>DEPENDENT</type><key>asterisk.total_queues</key><delay>0</delay><history>7d</history><description>The number of configured queues.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.queue.total</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>queues</value></tag></tags></item><item><uuid>8395ab5b70a7433eb508c513995988bb</uuid><name>Asterisk: Uptime</name><type>DEPENDENT</type><key>asterisk.uptime</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>uptime</units><description>System uptime in 'N days, hh:mm:ss' format.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.uptime</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>system</value></tag></tags><triggers><trigger><uuid>35ca01e504a548db9d4db8be1390d6b9</uuid><expression>nodata(/Asterisk by HTTP/asterisk.uptime,30m)=1</expression><name>Asterisk: Failed to fetch AMI page</name><event_name>Asterisk: Failed to fetch AMI page (or no data for 30m)</event_name><priority>WARNING</priority><description>Zabbix has not received data for items for the last 30 minutes.</description><manual_close>YES</manual_close><dependencies><dependency><name>Asterisk: Service is down</name><expression>last(/Asterisk by HTTP/net.tcp.service[&quot;tcp&quot;,&quot;{HOST.CONN}&quot;,&quot;{$AMI.PORT}&quot;])=0</expression></dependency></dependencies><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger><trigger><uuid>100d38b62c1d4ce298a9fadfbab19e4c</uuid><expression>last(/Asterisk by HTTP/asterisk.uptime)&lt;10m</expression><name>Asterisk: has been restarted</name><event_name>Asterisk: has been restarted (uptime &lt; 10m)</event_name><priority>INFO</priority><description>Uptime is less than 10 minutes</description><manual_close>YES</manual_close><tags><tag><tag>scope</tag><value>notice</value></tag></tags></trigger></triggers></item><item><uuid>86e23b5b9fd64e6e840588d25921fcbf</uuid><name>Asterisk: Uptime after reload</name><type>DEPENDENT</type><key>asterisk.uptime_reload</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>uptime</units><description>System uptime after a config reload in 'N days, hh:mm:ss' format.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.uptime_reload</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>system</value></tag></tags><triggers><trigger><uuid>4e99b65188264ba1aa80e24662f9b3cd</uuid><expression>last(/Asterisk by HTTP/asterisk.uptime_reload)&lt;10m</expression><name>Asterisk: has been reloaded</name><event_name>Asterisk: has been reloaded (uptime &lt; 10m)</event_name><priority>INFO</priority><description>Uptime is less than 10 minutes</description><manual_close>YES</manual_close><tags><tag><tag>scope</tag><value>notice</value></tag></tags></trigger></triggers></item><item><uuid>8ed124c5d61541c0ab1dcc3491fb05c6</uuid><name>Asterisk: Version</name><type>DEPENDENT</type><key>asterisk.version</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Service version</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.version</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>application</value></tag></tags><triggers><trigger><uuid>f1a260626ae6446d89e1e725e14c1098</uuid><expression>last(/Asterisk by HTTP/asterisk.version,#1)&lt;&gt;last(/Asterisk by HTTP/asterisk.version,#2) and length(last(/Asterisk by HTTP/asterisk.version))&gt;0</expression><name>Asterisk: Version has changed</name><event_name>Asterisk: Version has changed (new version: {ITEM.VALUE})</event_name><priority>INFO</priority><description>Asterisk version has changed. Ack to close.</description><manual_close>YES</manual_close><tags><tag><tag>scope</tag><value>notice</value></tag></tags></trigger></triggers></item><item><uuid>09102393dc6a4ac598f02d95801c6ca0</uuid><name>Asterisk: Service response time</name><type>SIMPLE</type><key>net.tcp.service.perf[&quot;tcp&quot;,&quot;{HOST.CONN}&quot;,&quot;{$AMI.PORT}&quot;]</key><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>Asterisk Manager API performance.</description><tags><tag><tag>component</tag><value>network</value></tag></tags><triggers><trigger><uuid>dbc74502be01498194003dc1a3d90014</uuid><expression>min(/Asterisk by HTTP/net.tcp.service.perf[&quot;tcp&quot;,&quot;{HOST.CONN}&quot;,&quot;{$AMI.PORT}&quot;],5m)&gt;{$AMI.RESPONSE_TIME.MAX.WARN}</expression><name>Asterisk: Service response time is too high</name><event_name>Asterisk: Service response time is too high (over {$AMI.RESPONSE_TIME.MAX.WARN} for 5m)</event_name><priority>WARNING</priority><manual_close>YES</manual_close><dependencies><dependency><name>Asterisk: Service is down</name><expression>last(/Asterisk by HTTP/net.tcp.service[&quot;tcp&quot;,&quot;{HOST.CONN}&quot;,&quot;{$AMI.PORT}&quot;])=0</expression></dependency></dependencies><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>58e18df6a5534395bf74d3babdb73170</uuid><name>Asterisk: Service status</name><type>SIMPLE</type><key>net.tcp.service[&quot;tcp&quot;,&quot;{HOST.CONN}&quot;,&quot;{$AMI.PORT}&quot;]</key><history>7d</history><description>Asterisk Manager API port availability.</description><valuemap><name>Service state</name></valuemap><preprocessing><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>10m</parameter></parameters></step></preprocessing><tags><tag><tag>component</tag><value>health</value></tag><tag><tag>component</tag><value>network</value></tag></tags><triggers><trigger><uuid>1fa3370fa93f4d07a2c470f993096554</uuid><expression>last(/Asterisk by HTTP/net.tcp.service[&quot;tcp&quot;,&quot;{HOST.CONN}&quot;,&quot;{$AMI.PORT}&quot;])=0</expression><name>Asterisk: Service is down</name><priority>AVERAGE</priority><manual_close>YES</manual_close><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item></items><discovery_rules><discovery_rule><uuid>3e7facc25a344cec8e384e8a9f8b372a</uuid><name>IAX peers discovery</name><type>DEPENDENT</type><key>asterisk.iax_peers.discovery</key><delay>0</delay><item_prototypes><item_prototype><uuid>72d71ec4fa2b4e88a03d25e3bbe8771a</uuid><name>IAX trunk &quot;{#OBJECTNAME}&quot;: Active channels</name><type>DEPENDENT</type><key>asterisk.iax.trunk.active_channels[{#OBJECTNAME}]</key><delay>0</delay><history>7d</history><description>The total number of active IAX trunk channels.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.trunks[?(@.ObjectName=='{#OBJECTNAME}')].active_channels.first()</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>channels</value></tag><tag><tag>trunk</tag><value>{#OBJECTNAME}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>e2a6c7a9b6234e2aae20c9aa480f9ef1</uuid><expression>min(/Asterisk by HTTP/asterisk.iax.trunk.active_channels[{#OBJECTNAME}],10m)&gt;={$AMI.TRUNK_ACTIVE_CHANNELS.MAX.WARN:&quot;{#OBJECTNAME}&quot;}</expression><name>IAX trunk &quot;{#OBJECTNAME}&quot;: Number of the IAX trunk &quot;{#OBJECTNAME}&quot; active channels is too high</name><event_name>IAX trunk &quot;{#OBJECTNAME}&quot;: Number of the IAX trunk &quot;{#OBJECTNAME}&quot; active channels is too high (over {$AMI.TRUNK_ACTIVE_CHANNELS.MAX.WARN:&quot;{#OBJECTNAME}&quot;} for 10m)</event_name><priority>WARNING</priority><description>The IAX trunk may not be able to process new calls.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype><item_prototype><uuid>bbde7e898b4b4d34b27308d6ddaf86fc</uuid><name>IAX trunk &quot;{#OBJECTNAME}&quot;: Status</name><type>DEPENDENT</type><key>asterisk.iax.trunk.status[{#OBJECTNAME}]</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>IAX trunk status. Here are the possible states that a device state may have:
+Unmonitored
+UNKNOWN
+UNREACHABLE
+OK</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.trunks[?(@.ObjectName=='{#OBJECTNAME}')].Status.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>health</value></tag><tag><tag>trunk</tag><value>{#OBJECTNAME}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>db595245acef4ec9b771c266c14100d2</uuid><expression>last(/Asterisk by HTTP/asterisk.iax.trunk.status[{#OBJECTNAME}])=&quot;UNKNOWN&quot; or last(/Asterisk by HTTP/asterisk.iax.trunk.status[{#OBJECTNAME}])=&quot;UNREACHABLE&quot;</expression><name>IAX trunk &quot;{#OBJECTNAME}&quot;: IAX trunk {#OBJECTNAME} has a state {ITEM.VALUE}</name><priority>AVERAGE</priority><description>The IAX trunk is unable to establish a connection with a neighbor due to network issues or incorrect configuration.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype></item_prototypes><master_item><key>asterisk.get_stats</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#OBJECTNAME}</lld_macro><path>$.ObjectName</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.iax.trunks</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing></discovery_rule><discovery_rule><uuid>1a123ca04c7544bfa823a39b8a9fe84c</uuid><name>PJSIP endpoints discovery</name><type>DEPENDENT</type><key>asterisk.pjsip_endpoints.discovery</key><delay>0</delay><item_prototypes><item_prototype><uuid>ec8220a1aa814112908337a009f6fcac</uuid><name>PJSIP trunk &quot;{#OBJECTNAME}&quot;: Active channels</name><type>DEPENDENT</type><key>asterisk.pjsip.trunk.active_channels[{#OBJECTNAME}]</key><delay>0</delay><history>7d</history><description>The total number of active PJSIP trunk channels.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pjsip.trunks[?(@.ObjectName=='{#OBJECTNAME}')].active_channels.first()</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>channels</value></tag><tag><tag>trunk</tag><value>{#OBJECTNAME}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>f192d555011c42c28c6a8f52c0388fe1</uuid><expression>min(/Asterisk by HTTP/asterisk.pjsip.trunk.active_channels[{#OBJECTNAME}],10m)&gt;={$AMI.TRUNK_ACTIVE_CHANNELS.MAX.WARN:&quot;{#OBJECTNAME}&quot;}</expression><name>PJSIP trunk &quot;{#OBJECTNAME}&quot;: Number of the PJSIP trunk &quot;{#OBJECTNAME}&quot; active channels is too high</name><event_name>PJSIP trunk &quot;{#OBJECTNAME}&quot;: Number of the PJSIP trunk &quot;{#OBJECTNAME}&quot; active channels is too high (over {$AMI.TRUNK_ACTIVE_CHANNELS.MAX.WARN:&quot;{#OBJECTNAME}&quot;} for 10m)</event_name><priority>WARNING</priority><description>The PJSIP trunk may not be able to process new calls.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype><item_prototype><uuid>c364b2ac50344372b155cbb98d9a7afe</uuid><name>PJSIP trunk &quot;{#OBJECTNAME}&quot;: Device state</name><type>DEPENDENT</type><key>asterisk.pjsip.trunk.devicestate[{#OBJECTNAME}]</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>PJSIP trunk status. Here are the possible states that a device state may have:
+Unavailable
+Not in use
+In use</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pjsip.trunks[?(@.ObjectName=='{#OBJECTNAME}')].DeviceState.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>health</value></tag><tag><tag>trunk</tag><value>{#OBJECTNAME}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>6f31d886d6954b82874d38646b233689</uuid><expression>last(/Asterisk by HTTP/asterisk.pjsip.trunk.devicestate[{#OBJECTNAME}])=&quot;Unavailable&quot;</expression><name>PJSIP trunk &quot;{#OBJECTNAME}&quot;: PJSIP trunk {#OBJECTNAME} has a state Unavailable</name><priority>AVERAGE</priority><description>The PJSIP trunk is unable to establish a connection with a neighbor due to network issues or incorrect configuration.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype></item_prototypes><master_item><key>asterisk.get_stats</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#OBJECTNAME}</lld_macro><path>$.ObjectName</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pjsip.trunks</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing></discovery_rule><discovery_rule><uuid>5a936a95d62f4b50a4f3db112a3e041f</uuid><name>Queues discovery</name><type>DEPENDENT</type><key>asterisk.queues.discovery</key><delay>0</delay><item_prototypes><item_prototype><uuid>c16d9df72ba749369726d4cfcc8b4f40</uuid><name>&quot;{#QUEUE}&quot;: Available</name><type>DEPENDENT</type><key>asterisk.queue.available[{#QUEUE}]</key><delay>0</delay><history>7d</history><description>The number of available queue members.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.queue.queues[?(@.Queue=='{#QUEUE}')].Available.first()</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>members</value></tag><tag><tag>queue</tag><value>{#QUEUE}</value></tag></tags></item_prototype><item_prototype><uuid>c271c7d76b2e49dea386bb08d60307d0</uuid><name>&quot;{#QUEUE}&quot;: Callers</name><type>DEPENDENT</type><key>asterisk.queue.callers[{#QUEUE}]</key><delay>0</delay><history>7d</history><description>The number incoming calls in queue.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.queue.queues[?(@.Queue=='{#QUEUE}')].Callers.first()</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>calls</value></tag><tag><tag>queue</tag><value>{#QUEUE}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>4f72c6a755be465287f36b8b12d3175b</uuid><expression>min(/Asterisk by HTTP/asterisk.queue.callers[{#QUEUE}],10m)&gt;{$AMI.QUEUE_CALLERS.MAX.WARN:&quot;{#QUEUE}&quot;}</expression><name>&quot;{#QUEUE}&quot;: Number of callers in the queue &quot;{#QUEUE}&quot; is too high</name><event_name>&quot;{#QUEUE}&quot;: Number of callers in the queue &quot;{#QUEUE}&quot; is too high (over {$AMI.QUEUE_CALLERS.MAX.WARN:&quot;{#QUEUE}&quot;} for 10m)</event_name><priority>WARNING</priority><description>There is a large number of calls in the queue.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype><item_prototype><uuid>8319ec55cf6f4e8590f180f1a81f37ed</uuid><name>&quot;{#QUEUE}&quot;: Logged in</name><type>DEPENDENT</type><key>asterisk.queue.loggedin[{#QUEUE}]</key><delay>0</delay><history>7d</history><description>The number of queue members.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.queue.queues[?(@.Queue=='{#QUEUE}')].LoggedIn.first()</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>members</value></tag><tag><tag>queue</tag><value>{#QUEUE}</value></tag></tags></item_prototype></item_prototypes><master_item><key>asterisk.get_stats</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#QUEUE}</lld_macro><path>$.Queue</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.queue.queues</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing></discovery_rule><discovery_rule><uuid>675fc5b11cb1482db0c539dfb9100e75</uuid><name>SIP peers discovery</name><type>DEPENDENT</type><key>asterisk.sip_peers.discovery</key><delay>0</delay><item_prototypes><item_prototype><uuid>9043578864494b13b249ee7bdf13820d</uuid><name>SIP trunk &quot;{#OBJECTNAME}&quot;: Active channels</name><type>DEPENDENT</type><key>asterisk.sip.trunk.active_channels[{#OBJECTNAME}]</key><delay>0</delay><history>7d</history><description>The total number of active SIP trunk channels.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.trunks[?(@.ObjectName=='{#OBJECTNAME}')].active_channels.first()</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>channels</value></tag><tag><tag>trunk</tag><value>{#OBJECTNAME}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>51820b1326f84f51ba0e561946275133</uuid><expression>min(/Asterisk by HTTP/asterisk.sip.trunk.active_channels[{#OBJECTNAME}],10m)&gt;={$AMI.TRUNK_ACTIVE_CHANNELS.MAX.WARN:&quot;{#OBJECTNAME}&quot;}</expression><name>SIP trunk &quot;{#OBJECTNAME}&quot;: Number of the SIP trunk &quot;{#OBJECTNAME}&quot; active channels is too high</name><event_name>SIP trunk &quot;{#OBJECTNAME}&quot;: Number of the SIP trunk &quot;{#OBJECTNAME}&quot; active channels is too high (over {$AMI.TRUNK_ACTIVE_CHANNELS.MAX.WARN:&quot;{#OBJECTNAME}&quot;} for 10m)</event_name><priority>WARNING</priority><description>The SIP trunk may not be able to process new calls.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype><item_prototype><uuid>df33da749e874f55be5f0c33cd201f62</uuid><name>SIP trunk &quot;{#OBJECTNAME}&quot;: Status</name><type>DEPENDENT</type><key>asterisk.sip.trunk.status[{#OBJECTNAME}]</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>SIP trunk status. Here are the possible states that a device state may have:
+Unmonitored
+UNKNOWN
+UNREACHABLE
+OK</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.trunks[?(@.ObjectName=='{#OBJECTNAME}')].Status.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>asterisk.get_stats</key></master_item><tags><tag><tag>component</tag><value>health</value></tag><tag><tag>trunk</tag><value>{#OBJECTNAME}</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>39cac88e9263470da6e4b1a08f806c58</uuid><expression>last(/Asterisk by HTTP/asterisk.sip.trunk.status[{#OBJECTNAME}])=&quot;UNKNOWN&quot; or last(/Asterisk by HTTP/asterisk.sip.trunk.status[{#OBJECTNAME}])=&quot;UNREACHABLE&quot;</expression><name>SIP trunk &quot;{#OBJECTNAME}&quot;: SIP trunk {#OBJECTNAME} has a state {ITEM.VALUE}</name><priority>AVERAGE</priority><description>The SIP trunk is unable to establish a connection with a neighbor due to network issues or incorrect configuration.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype></item_prototypes><master_item><key>asterisk.get_stats</key></master_item><lld_macro_paths><lld_macro_path><lld_macro>{#OBJECTNAME}</lld_macro><path>$.ObjectName</path></lld_macro_path></lld_macro_paths><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.sip.trunks</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing></discovery_rule></discovery_rules><tags><tag><tag>class</tag><value>voip</value></tag><tag><tag>target</tag><value>asterisk</value></tag></tags><macros><macro><macro>{$AMI.PORT}</macro><value>5038</value><description>AMI port number for checking service availability.</description></macro><macro><macro>{$AMI.QUEUE_CALLERS.MAX.WARN}</macro><value>10</value><description>The maximum number of callers in a queue for trigger expression.</description></macro><macro><macro>{$AMI.RESPONSE_TIME.MAX.WARN}</macro><value>10s</value><description>The Asterisk Manager API page maximum response time in seconds for trigger expression.</description></macro><macro><macro>{$AMI.SECRET}</macro><value>zabbix</value><description>The Asterisk Manager secret.</description></macro><macro><macro>{$AMI.TRUNK_ACTIVE_CHANNELS.MAX.WARN}</macro><value>28</value><description>The maximum number of busy channels of a trunk for trigger expression.</description></macro><macro><macro>{$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;IAX&quot;}</macro><value>28</value><description>The total maximum number of busy channels of IAX trunks for trigger expression.</description></macro><macro><macro>{$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;PJSIP&quot;}</macro><value>28</value><description>The total maximum number of busy channels of PJSIP trunks for trigger expression.</description></macro><macro><macro>{$AMI.TRUNK_ACTIVE_CHANNELS_TOTAL.MAX.WARN:&quot;SIP&quot;}</macro><value>28</value><description>The total maximum number of busy channels of SIP trunks for trigger expression.</description></macro><macro><macro>{$AMI.TRUNK_REGEXP}</macro><value>trunk</value><description>The regexp for the identification of trunk peers.</description></macro><macro><macro>{$AMI.URL}</macro><value>http://asterisk:8088/asterisk/rawman</value><description>The Asterisk Manager API URL in the format `&lt;scheme&gt;://&lt;host&gt;:&lt;port&gt;/&lt;prefix&gt;/rawman`.</description></macro><macro><macro>{$AMI.USERNAME}</macro><value>zabbix</value><description>The Asterisk Manager name.</description></macro></macros><valuemaps><valuemap><uuid>d6e38832f2d44ec0bf6761e36fd7668f</uuid><name>Service state</name><mappings><mapping><value>0</value><newvalue>Down</newvalue></mapping><mapping><value>1</value><newvalue>Up</newvalue></mapping></mappings></valuemap></valuemaps></template></templates><graphs><graph><uuid>92b561a0aee24da9a7d9875f2293316d</uuid><name>Asterisk: Calls stats</name><graph_items><graph_item><color>1A7C11</color><item><host>Asterisk by HTTP</host><key>asterisk.active_channels</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Asterisk by HTTP</host><key>asterisk.active_calls</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><yaxisside>RIGHT</yaxisside><item><host>Asterisk by HTTP</host><key>asterisk.calls_processed.rate</key></item></graph_item></graph_items></graph><graph><uuid>0e5d56155a1240108a4ffc2f3dc041be</uuid><name>Asterisk: IAX peers</name><graph_items><graph_item><color>1A7C11</color><item><host>Asterisk by HTTP</host><key>asterisk.iax.active_channels</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Asterisk by HTTP</host><key>asterisk.iax.online</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>Asterisk by HTTP</host><key>asterisk.iax.offline</key></item></graph_item><graph_item><sortorder>3</sortorder><color>A54F10</color><item><host>Asterisk by HTTP</host><key>asterisk.iax.unmonitored</key></item></graph_item></graph_items></graph><graph><uuid>fd5b051daaf64df89856bec400bbc3a0</uuid><name>Asterisk: PJSIP peers</name><graph_items><graph_item><color>1A7C11</color><item><host>Asterisk by HTTP</host><key>asterisk.pjsip.active_channels</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Asterisk by HTTP</host><key>asterisk.pjsip.available</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>Asterisk by HTTP</host><key>asterisk.pjsip.unavailable</key></item></graph_item></graph_items></graph><graph><uuid>2781590218fe4cc9ade68446e5d11aa2</uuid><name>Asterisk: SIP peers</name><graph_items><graph_item><color>1A7C11</color><item><host>Asterisk by HTTP</host><key>asterisk.sip.active_channels</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Asterisk by HTTP</host><key>asterisk.sip.monitored_online</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>Asterisk by HTTP</host><key>asterisk.sip.monitored_offline</key></item></graph_item><graph_item><sortorder>3</sortorder><color>A54F10</color><item><host>Asterisk by HTTP</host><key>asterisk.sip.unmonitored_online</key></item></graph_item><graph_item><sortorder>4</sortorder><color>FC6EA3</color><item><host>Asterisk by HTTP</host><key>asterisk.sip.unmonitored_offline</key></item></graph_item></graph_items></graph></graphs></zabbix_export>

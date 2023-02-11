@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:14:55Z</date><groups><group><uuid>a571c0d144b14fd4a87a9d9b2aa9fcd6</uuid><name>Templates/Applications</name></group></groups><templates><template><uuid>08ef3d687d754b0aba17e1dcbd77d4bd</uuid><template>Cloudflare by HTTP</template><name>Cloudflare by HTTP</name><description>The template to monitor Cloudflare to see your web traffic and DNS metrics. It works without any external scripts and uses Script item.
+
+Template tooling version used: 0.41</description><groups><group><name>Templates/Applications</name></group></groups><items><item><uuid>2be79391779a4cd395723e62694262e8</uuid><name>Cloudflare: Total bandwidth</name><type>DEPENDENT</type><key>cloudflare.bandwidth.all</key><delay>0</delay><history>7d</history><units>B</units><description>The volume of all data.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.bandwidth.all</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>bandwidth</value></tag></tags></item><item><uuid>7f5900d6c707405789624f84f502b042</uuid><name>Cloudflare: Cached bandwidth</name><type>DEPENDENT</type><key>cloudflare.bandwidth.cached</key><delay>0</delay><history>7d</history><units>B</units><description>The volume of cached data.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.bandwidth.cached</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>bandwidth</value></tag></tags></item><item><uuid>c5ab8cc281ff4f75bd4ada79d2c0d1e8</uuid><name>Cloudflare: Cache hit ratio of bandwidth</name><type>DEPENDENT</type><key>cloudflare.bandwidth.cache_hit_ratio</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The ratio of the amount cached bandwidth to the bandwidth in percentage.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.bandwidth.cache_hit_ratio</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>bandwidth</value></tag></tags><triggers><trigger><uuid>acf573785c394924aae8ef74b2683fd1</uuid><expression>max(/Cloudflare by HTTP/cloudflare.bandwidth.cache_hit_ratio,#3) &lt; {$CLOUDFLARE.CACHED_BANDWIDTH.MIN.WARN}</expression><name>Cloudflare: Cached bandwidth is too low</name><event_name>Cloudflare: Cached bandwidth is too low (less than {$CLOUDFLARE.CACHED_BANDWIDTH.MIN.WARN}% for 3 last measurements)</event_name><opdata>Current value: {ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>901db6b121c7473485c91b0f27e7cf50</uuid><name>Cloudflare: SSL encrypted bandwidth</name><type>DEPENDENT</type><key>cloudflare.bandwidth.ssl.encrypted</key><delay>0</delay><history>7d</history><units>B</units><description>The volume of encrypted data.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.bandwidth.encrypted</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>bandwidth</value></tag></tags></item><item><uuid>4637d88e62204f9d8fb9fc0f179c5319</uuid><name>Cloudflare: Unencrypted bandwidth</name><type>DEPENDENT</type><key>cloudflare.bandwidth.ssl.unencrypted</key><delay>0</delay><history>7d</history><units>B</units><description>The volume of unencrypted data.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.bandwidth.unencrypted</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>bandwidth</value></tag></tags></item><item><uuid>96e88a64df014997b8c675cbc4bb97a1</uuid><name>Cloudflare: Uncached bandwidth</name><type>DEPENDENT</type><key>cloudflare.bandwidth.uncached</key><delay>0</delay><history>7d</history><units>B</units><description>The volume of uncached data.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.bandwidth.uncached</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>bandwidth</value></tag></tags></item><item><uuid>6eff62f2786d42a7925bd516a1c2a958</uuid><name>Cloudflare: DNS queries</name><type>DEPENDENT</type><key>cloudflare.dns.query.all</key><delay>0</delay><history>7d</history><units>conn</units><description>The amount of all DNS queries.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.dns.query.all</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>dns</value></tag></tags></item><item><uuid>4612a834ef054740ba5fea529a08e220</uuid><name>Cloudflare: Stale DNS queries</name><type>DEPENDENT</type><key>cloudflare.dns.query.stale</key><delay>0</delay><history>7d</history><units>conn</units><description>The number of stale DNS queries.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.dns.query.stale</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>dns</value></tag></tags></item><item><uuid>4aeb289b631a402390a833e3c5227d38</uuid><name>Cloudflare: Uncached DNS queries</name><type>DEPENDENT</type><key>cloudflare.dns.query.uncached</key><delay>0</delay><history>7d</history><units>conn</units><description>The number of uncached DNS queries.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.dns.query.uncached</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>dns</value></tag></tags></item><item><uuid>9450a68208fd4cb8bde009296d722064</uuid><name>Cloudflare: Get data</name><type>SCRIPT</type><key>cloudflare.get</key><delay>0;m01</delay><history>0</history><trends>0</trends><value_type>TEXT</value_type><params>var Cloudflare = {
+    params: {},
+
+    setParams: function (params) {
+        ['api_endpoint', 'token', 'zone'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined'
+                    || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        Cloudflare.params = params;
+        if (typeof Cloudflare.params.api_endpoint === 'string') {
+            if (!Cloudflare.params.api_endpoint.endsWith('/')) {
+                Cloudflare.params.api_endpoint += '/';
+            }
+        }
+    },
+
+    request: function (method, query, data) {
+        var response,
+            request = new HttpRequest(),
+            url = Cloudflare.params.api_endpoint + query;
+
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Authorization: Bearer ' + Cloudflare.params.token);
+
+        if (typeof data !== 'undefined') {
+            data = JSON.stringify(data);
+        }
+
+        Zabbix.log(4, '[ Cloudflare ] Sending request: ' + url + ((typeof data === 'string') ? ('\n' + data) : ''));
+
+        switch (method) {
+            case 'get':
+                response = request.get(url, data);
+                break;
+
+            case 'post':
+                response = request.post(url, data);
+                break;
+
+            default:
+                throw 'Unsupported HTTP request method: ' + method;
+        }
+
+        Zabbix.log(4, '[ Cloudflare ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() &lt; 200 || request.getStatus() &gt;= 300) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        if (response !== null) {
+            try {
+                response = JSON.parse(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from Cloudflare. Check debug log for more information.';
+            }
+        }
+
+        if (query === 'graphql/' &amp;&amp; request.getStatus() == 200 &amp;&amp; typeof response.errors !== 'undefined'
+                &amp;&amp; Array.isArray(response.errors)) {
+            throw 'Request failed with error &quot;' + (getField(response, 'errors.0.message') || 'unknown') + '&quot;';
+        }
+
+        return {
+            status: request.getStatus(),
+            response: response
+        };
+    }
+}
+
+function getField(object, field, def) {
+    var names = field.split('.');
+    var name = names.shift();
+
+    while (typeof name !== 'undefined') {
+        if (typeof object === undefined || typeof object[name] === 'undefined') {
+            return def;
+        }
+
+        object = object[name];
+        name = names.shift();
+    }
+
+    return object;
+}
+
+try {
+    Cloudflare.setParams(JSON.parse(value));
+
+    var datetime_end = new Date(),
+        datetime_start = new Date();
+
+    datetime_start.setTime(datetime_end.getTime() - 3600000);
+    datetime_start.setMinutes(0, 0, 0);
+    datetime_end.setTime(datetime_start.getTime());
+    datetime_end.setMinutes(59, 59, 0);
+
+    var datetime_start_str = datetime_start.toISOString(),
+        datetime_end_str = datetime_end.toISOString();
+
+    var data = {
+        &quot;query&quot;: &quot;{viewer {zones(filter: {zoneTag: \&quot;&quot; + Cloudflare.params.zone + &quot;\&quot;}) {\
+        httpRequests1hGroups(limit: 100 filter: {\
+            datetime_geq: \&quot;&quot; + datetime_start_str + &quot;\&quot;,  datetime_leq: \&quot;&quot; + datetime_end_str + &quot;\&quot;\
+            }) {\
+                sum{\
+                    requests\
+                    cachedRequests\
+                    encryptedRequests\
+                    responseStatusMap{ requests edgeResponseStatus }\
+                    bytes\
+                    cachedBytes\
+                    encryptedBytes\
+                    threats\
+                    pageViews\
+                }\
+                uniq{uniques}\
+                }\
+            }}}&quot;, &quot;variables&quot;: {}
+    }
+    var result = Cloudflare.request('post', 'graphql/', data),
+        cloudflare = {},
+        res = getField(result.response, 'data.viewer.zones.0.httpRequests1hGroups.0.sum');
+
+    if (typeof res === 'object') {
+        cloudflare = {
+            requests: {
+                all: res.requests || 0,
+                cached: res.cachedRequests || 0,
+                encrypted: res.encryptedRequests || 0,
+                cache_hit_ratio: 0,
+                success_ratio: 0,
+                others_ratio: 0,
+                response_100: 0,
+                response_200: 0,
+                response_300: 0,
+                response_400: 0,
+                response_500: 0
+            },
+            bandwidth: {
+                all: res.bytes || 0,
+                cached: res.cachedBytes || 0,
+                cache_hit_ratio: 0,
+                encrypted: res.encryptedBytes || 0,
+            },
+            threats: {
+                all: res.threats || 0
+            },
+            pageviews: {
+                all: res.pageViews || 0
+            }
+        }
+
+        cloudflare.requests.uncached = res.requests - res.cachedRequests;
+        cloudflare.requests.unencrypted = cloudflare.requests.all - cloudflare.requests.encrypted;
+        cloudflare.bandwidth.uncached = cloudflare.bandwidth.all - cloudflare.bandwidth.cached;
+        cloudflare.bandwidth.unencrypted = cloudflare.bandwidth.all - cloudflare.bandwidth.encrypted;
+
+        if (Array.isArray(res.responseStatusMap)) {
+            res.responseStatusMap.forEach(function (element) {
+                var group = Math.floor((element.edgeResponseStatus / 100)) * 100;
+                cloudflare.requests['response_' + group] += element.requests;
+            });
+        }
+
+        if (cloudflare.requests.all &gt; 0) {
+            cloudflare.requests.success_ratio = (cloudflare.requests.response_200
+                / cloudflare.requests.all * 100).toFixed(2);
+            cloudflare.requests.others_ratio = ((cloudflare.requests.all - cloudflare.requests.response_200)
+                / cloudflare.requests.all * 100).toFixed(2);
+            cloudflare.requests.cache_hit_ratio = (cloudflare.requests.cached
+                / cloudflare.requests.all * 100).toFixed(2);
+        }
+
+        if (cloudflare.bandwidth.all &gt; 0) {
+            cloudflare.bandwidth.cache_hit_ratio = (cloudflare.bandwidth.cached / cloudflare.bandwidth.all * 100).toFixed(2);
+        }
+
+        res = getField(result.response, 'data.viewer.zones.0.httpRequests1hGroups.0.uniq');
+
+        if (typeof res === 'object') {
+            cloudflare.uniques = {
+                all: res.uniques || 0
+            }
+        }
+
+        result = Cloudflare.request('get', 'zones/' + encodeURIComponent(Cloudflare.params.zone)
+            + '/dns_analytics/report?dimensions=queryName&amp;metrics=queryCount,uncachedCount,staleCount&amp;since='
+            + encodeURIComponent(datetime_start_str) + '&amp;until=' + encodeURIComponent(datetime_end_str));
+
+        res = getField(result.response, 'result.totals');
+
+        if (typeof result.response.result === 'object') {
+            cloudflare.dns = {
+                query: {
+                    all: res.queryCount || 0,
+                    uncached: res.uncachedCount || 0,
+                    stale: res.staleCount || 0
+                }
+            }
+        }
+    }
+
+    return JSON.stringify(cloudflare);
+}
+catch (error) {
+    error += (String(error).endsWith('.')) ? '' : '.';
+    Zabbix.log(3, '[ Cloudflare ] ERROR: ' + error);
+    throw 'Requesting failed: ' + error;
+}</params><description>The JSON with result of Cloudflare API request.</description><timeout>{$CLOUDFLARE.GET_DATA.TIMEOUT}</timeout><parameters><parameter><name>token</name><value>{$CLOUDFLARE.API.TOKEN}</value></parameter><parameter><name>zone</name><value>{$CLOUDFLARE.ZONE_ID}</value></parameter><parameter><name>api_endpoint</name><value>{$CLOUDFLARE.API.URL}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>71efacd9f1dc46a7aa29876c8bf7906c</uuid><name>Cloudflare: Total page views</name><type>DEPENDENT</type><key>cloudflare.pageviews.all</key><delay>0</delay><history>7d</history><units>pg</units><description>The amount of all pageviews.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.pageviews.all</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>pageviews</value></tag></tags></item><item><uuid>d4a7431b1f6a4d3ab11551a36c98fbf7</uuid><name>Cloudflare: Total requests</name><type>DEPENDENT</type><key>cloudflare.requests.all</key><delay>0</delay><history>7d</history><units>req</units><description>The amount of all requests.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.all</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>cc9d651cdec94afeb12ead87b3c3e8f3</uuid><name>Cloudflare: Cached requests</name><type>DEPENDENT</type><key>cloudflare.requests.cached</key><delay>0</delay><history>7d</history><units>req</units><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.cached</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>e1c2a1280d25439f8020b3ebc451d892</uuid><name>Cloudflare: Cache hit ratio % over time</name><type>DEPENDENT</type><key>cloudflare.requests.cache_hit_ratio</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The ratio of the amount cached requests to all requests in percentage.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.cache_hit_ratio</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>228912bdae724d70b1abe79510b69082</uuid><name>Cloudflare: Non-2xx responses ratio</name><type>DEPENDENT</type><key>cloudflare.requests.others_ratio</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The ratio of the amount requests with non-2xx response codes to all requests in percentage.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.others_ratio</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags><triggers><trigger><uuid>e76f4a61dd094419b6e0af706758e545</uuid><expression>min(/Cloudflare by HTTP/cloudflare.requests.others_ratio,#3) &gt; {$CLOUDFLARE.ERRORS.MAX.WARN}</expression><name>Cloudflare: Ratio of non-2xx responses is too high</name><event_name>Cloudflare: Ratio of non-2xx responses is too high (more than {$CLOUDFLARE.ERRORS.MAX.WARN}% for 3 last measurements)</event_name><opdata>Current value: {ITEM.LASTVALUE1}</opdata><priority>AVERAGE</priority><description>A large number of errors can indicate a malfunction of the site.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>0f427419265a4ef09f052a03c539125d</uuid><name>Cloudflare: Response codes 1xx</name><type>DEPENDENT</type><key>cloudflare.requests.response_100</key><delay>0</delay><history>7d</history><units>req</units><description>The number requests with 1xx response codes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.response_100</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>3ade3e726d314382a3e841b3d5cb5834</uuid><name>Cloudflare: Response codes 2xx</name><type>DEPENDENT</type><key>cloudflare.requests.response_200</key><delay>0</delay><history>7d</history><units>req</units><description>The number requests with 2xx response codes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.response_200</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>2caff86e7ca5400889f3b2bd4b6ba986</uuid><name>Cloudflare: Response codes 3xx</name><type>DEPENDENT</type><key>cloudflare.requests.response_300</key><delay>0</delay><history>7d</history><units>req</units><description>The number requests with 3xx response codes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.response_300</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>b3510ec2adc74e10824365012c13250f</uuid><name>Cloudflare: Response codes 4xx</name><type>DEPENDENT</type><key>cloudflare.requests.response_400</key><delay>0</delay><history>7d</history><units>req</units><description>The number requests with 4xx response codes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.response_400</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>714ef2cbecbe4a93b20988a0bc6863a7</uuid><name>Cloudflare: Response codes 5xx</name><type>DEPENDENT</type><key>cloudflare.requests.response_500</key><delay>0</delay><history>7d</history><units>req</units><description>The number requests with 5xx response codes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.response_500</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>d39fcd4fdc594257bea91de0890d326b</uuid><name>Cloudflare: SSL encrypted requests</name><type>DEPENDENT</type><key>cloudflare.requests.ssl.encrypted</key><delay>0</delay><history>7d</history><units>req</units><description>The number of encrypted requests.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.encrypted</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>acbbc431dfc3431583123380edb6da38</uuid><name>Cloudflare: Unencrypted requests</name><type>DEPENDENT</type><key>cloudflare.requests.ssl.unencrypted</key><delay>0</delay><history>7d</history><units>req</units><description>The number of unencrypted requests.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.unencrypted</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>6100ff50001543ae83e84ab2c47260f3</uuid><name>Cloudflare: 2xx responses ratio</name><type>DEPENDENT</type><key>cloudflare.requests.success_ratio</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The ratio of the amount requests with 2xx response codes to all requests in percentage.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.success_ratio</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>7907f68e795b40fca1bd520556ea1fff</uuid><name>Cloudflare: Uncached requests</name><type>DEPENDENT</type><key>cloudflare.requests.uncached</key><delay>0</delay><history>7d</history><units>req</units><description>The number of uncached requests.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.requests.uncached</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag></tags></item><item><uuid>328051a78529494e943edda567aa0e24</uuid><name>Cloudflare: Total threats</name><type>DEPENDENT</type><key>cloudflare.threats.all</key><delay>0</delay><history>7d</history><description>The number of all threats.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.threats.all</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>threats</value></tag></tags></item><item><uuid>d1a2ec213b084701805f3f974af25a21</uuid><name>Cloudflare: Unique visitors</name><type>DEPENDENT</type><key>cloudflare.uniques.all</key><delay>0</delay><history>7d</history><units>conn</units><description>The number of all visitors IPs.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.uniques.all</parameter></parameters></step></preprocessing><master_item><key>cloudflare.get</key></master_item><tags><tag><tag>component</tag><value>uniques</value></tag></tags></item></items><tags><tag><tag>class</tag><value>service</value></tag><tag><tag>target</tag><value>cloudflare</value></tag></tags><macros><macro><macro>{$CLOUDFLARE.API.TOKEN}</macro><value>&lt;change&gt;</value><description>Your Cloudflare API Token.</description></macro><macro><macro>{$CLOUDFLARE.API.URL}</macro><value>https://api.cloudflare.com/client/v4</value><description>The URL of Cloudflare API endpoint.</description></macro><macro><macro>{$CLOUDFLARE.CACHED_BANDWIDTH.MIN.WARN}</macro><value>50</value><description>Minimum of cached bandwidth in %.</description></macro><macro><macro>{$CLOUDFLARE.ERRORS.MAX.WARN}</macro><value>30</value><description>Maximum responses with errors in %.</description></macro><macro><macro>{$CLOUDFLARE.GET_DATA.TIMEOUT}</macro><value>3s</value><description>Response timeout for Cloudflare API.</description></macro><macro><macro>{$CLOUDFLARE.ZONE_ID}</macro><value>&lt;change&gt;</value><description>Your Cloudflare Site Zone ID.</description></macro></macros><dashboards><dashboard><uuid>51f1013e8a3d492faed27fe80b68fc53</uuid><name>Overview</name><pages><page><widgets><widget><type>GRAPH_CLASSIC</type><width>12</width><height>5</height><fields><field><type>INTEGER</type><name>source_type</name><value>0</value></field><field><type>GRAPH</type><name>graphid</name><value><host>Cloudflare by HTTP</host><name>Cloudflare: Bandwidth</name></value></field></fields></widget><widget><type>GRAPH_CLASSIC</type><x>12</x><width>12</width><height>5</height><fields><field><type>INTEGER</type><name>source_type</name><value>0</value></field><field><type>GRAPH</type><name>graphid</name><value><host>Cloudflare by HTTP</host><name>Cloudflare: Web requests</name></value></field></fields></widget><widget><type>GRAPH_CLASSIC</type><y>5</y><width>12</width><height>5</height><fields><field><type>INTEGER</type><name>source_type</name><value>0</value></field><field><type>GRAPH</type><name>graphid</name><value><host>Cloudflare by HTTP</host><name>Cloudflare: DNS requests</name></value></field></fields></widget><widget><type>GRAPH_CLASSIC</type><x>12</x><y>5</y><width>12</width><height>5</height><fields><field><type>INTEGER</type><name>source_type</name><value>0</value></field><field><type>GRAPH</type><name>graphid</name><value><host>Cloudflare by HTTP</host><name>Cloudflare: Caching</name></value></field></fields></widget><widget><type>GRAPH_CLASSIC</type><y>10</y><width>12</width><height>5</height><fields><field><type>INTEGER</type><name>source_type</name><value>0</value></field><field><type>GRAPH</type><name>graphid</name><value><host>Cloudflare by HTTP</host><name>Cloudflare: HTTP responses ratio over time</name></value></field></fields></widget><widget><type>GRAPH_CLASSIC</type><x>12</x><y>10</y><width>12</width><height>5</height><fields><field><type>INTEGER</type><name>source_type</name><value>0</value></field><field><type>GRAPH</type><name>graphid</name><value><host>Cloudflare by HTTP</host><name>Cloudflare: IPs and threats</name></value></field></fields></widget><widget><type>GRAPH_CLASSIC</type><y>15</y><width>12</width><height>5</height><fields><field><type>INTEGER</type><name>source_type</name><value>0</value></field><field><type>GRAPH</type><name>graphid</name><value><host>Cloudflare by HTTP</host><name>Cloudflare: HTTP response codes over time</name></value></field></fields></widget></widgets></page></pages></dashboard></dashboards></template></templates><graphs><graph><uuid>09e113216680490c9dd15805474bcac7</uuid><name>Cloudflare: Bandwidth</name><graph_items><graph_item><color>1A7C11</color><item><host>Cloudflare by HTTP</host><key>cloudflare.bandwidth.all</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Cloudflare by HTTP</host><key>cloudflare.bandwidth.cached</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>Cloudflare by HTTP</host><key>cloudflare.bandwidth.uncached</key></item></graph_item><graph_item><sortorder>3</sortorder><color>A54F10</color><item><host>Cloudflare by HTTP</host><key>cloudflare.bandwidth.ssl.encrypted</key></item></graph_item><graph_item><sortorder>4</sortorder><color>FC6EA3</color><item><host>Cloudflare by HTTP</host><key>cloudflare.bandwidth.ssl.unencrypted</key></item></graph_item></graph_items></graph><graph><uuid>ed4ef5ce4a6a4c5692c22079d8879e0e</uuid><name>Cloudflare: Caching</name><graph_items><graph_item><color>1A7C11</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.cache_hit_ratio</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Cloudflare by HTTP</host><key>cloudflare.bandwidth.cache_hit_ratio</key></item></graph_item></graph_items></graph><graph><uuid>25df26cece41403d864f1ced5901bffa</uuid><name>Cloudflare: DNS requests</name><graph_items><graph_item><color>1A7C11</color><item><host>Cloudflare by HTTP</host><key>cloudflare.dns.query.all</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Cloudflare by HTTP</host><key>cloudflare.dns.query.stale</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>Cloudflare by HTTP</host><key>cloudflare.dns.query.uncached</key></item></graph_item></graph_items></graph><graph><uuid>3fb3b089a115420bbc051c14fcd2f3aa</uuid><name>Cloudflare: HTTP response codes over time</name><graph_items><graph_item><color>1A7C11</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.response_100</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.response_200</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.response_300</key></item></graph_item><graph_item><sortorder>3</sortorder><color>A54F10</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.response_400</key></item></graph_item><graph_item><sortorder>4</sortorder><color>FC6EA3</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.response_500</key></item></graph_item></graph_items></graph><graph><uuid>c9e1708427a84182a406faec327bb6f1</uuid><name>Cloudflare: HTTP responses ratio over time</name><graph_items><graph_item><color>1A7C11</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.others_ratio</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.success_ratio</key></item></graph_item></graph_items></graph><graph><uuid>6a0da78eec23423ab084a0760f1691be</uuid><name>Cloudflare: IPs and threats</name><graph_items><graph_item><color>1A7C11</color><item><host>Cloudflare by HTTP</host><key>cloudflare.threats.all</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Cloudflare by HTTP</host><key>cloudflare.uniques.all</key></item></graph_item></graph_items></graph><graph><uuid>659df99629a341449c77baf7a9b99b77</uuid><name>Cloudflare: Web requests</name><graph_items><graph_item><color>1A7C11</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.all</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.cached</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.uncached</key></item></graph_item><graph_item><sortorder>3</sortorder><color>A54F10</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.ssl.encrypted</key></item></graph_item><graph_item><sortorder>4</sortorder><color>FC6EA3</color><item><host>Cloudflare by HTTP</host><key>cloudflare.requests.ssl.unencrypted</key></item></graph_item></graph_items></graph></graphs></zabbix_export>

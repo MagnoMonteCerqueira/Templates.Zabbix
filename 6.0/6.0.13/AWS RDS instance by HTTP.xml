@@ -1,0 +1,758 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:15:10Z</date><groups><group><uuid>c2c162144c2d4c5491c8801193af4945</uuid><name>Templates/Cloud</name></group></groups><templates><template><uuid>c6d9475847f44d9193f8253e5995b8f8</uuid><template>AWS RDS instance by HTTP</template><name>AWS RDS instance by HTTP</name><description>The template gets AWS RDS instance metrics and uses the script item to make HTTP requests to the CloudWatch API.
+Don't forget to read the README.md for the correct setup of the template.
+
+You can discuss this template or leave feedback on our forum https://www.zabbix.com/forum/zabbix-suggestions-and-feedback
+
+Template tooling version used: 0.42</description><groups><group><name>Templates/Cloud</name></group></groups><items><item><uuid>94471806c4cf482fb66cbe305a0e87a5</uuid><name>AWS RDS: Get alarms check</name><type>DEPENDENT</type><key>aws.rds.alarms.check</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Data collection check.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.error</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_alarms</key></master_item><tags><tag><tag>component</tag><value>status</value></tag></tags><triggers><trigger><uuid>112da2ba956740fda7edcd9bd3a8651c</uuid><expression>length(last(/AWS RDS instance by HTTP/aws.rds.alarms.check))&gt;0</expression><name>AWS RDS: Failed to get alarms data</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>9e40764a74e54c3b8bf0e7f75fe5f115</uuid><name>AWS RDS: Disk: Binlog Usage</name><type>DEPENDENT</type><key>aws.rds.bin_log_disk_usage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The amount of disk space occupied by binary logs on the master. Applies to MySQL read replicas.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;BinLogDiskUsage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag><tag><tag>engine</tag><value>mariadb</value></tag><tag><tag>engine</tag><value>mysql</value></tag></tags></item><item><uuid>7b7273f5d9144dd1b82c8c3fb649f593</uuid><name>AWS RDS: Burst balance</name><type>DEPENDENT</type><key>aws.rds.burst_balance</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The percent of General Purpose SSD (gp2) burst-bucket I/O credits available.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;BurstBalance&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags><triggers><trigger><uuid>730337e340cf4b129d4b38f1c7c82cf6</uuid><expression>max(/AWS RDS instance by HTTP/aws.rds.burst_balance,5m)&lt;{$AWS.RDS.BURST.CREDIT.BALANCE.MIN.WARN}</expression><name>AWS RDS: Burst balance is too low</name><event_name>AWS RDS: Burst balance is too low (less {$AWS.RDS.BURST.CREDIT.BALANCE.MIN.WARN}% for 5m)</event_name><opdata>Current value: {ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>capacity</value></tag></tags></trigger></triggers></item><item><uuid>975ee74af92c4b589f2488d403fdb18d</uuid><name>AWS RDS: Class</name><type>DEPENDENT</type><key>aws.rds.class</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Contains the name of the compute and memory capacity class of the DB instance.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$[*].DBInstanceClass.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>instance</value></tag></tags></item><item><uuid>83d19e8a062b4890a4897e97bb1d5a24</uuid><name>AWS RDS: Credit CPU: Balance</name><type>DEPENDENT</type><key>aws.rds.cpu.credit_balance</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of CPU credits that an instance has accumulated, reported at 5-minute intervals.
+You can use this metric to determine how long a DB instance can burst beyond its baseline performance level at a given rate.
+When an instance is running, credits in the CPUCreditBalance don't expire. When the instance stops, the CPUCreditBalance does not persist, and all accrued credits are lost.
+
+This metric applies only to db.t2.small and db.t2.medium instances for Aurora MySQL, and to db.t3 instances for Aurora PostgreSQL.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;CPUCreditBalance&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>cpu</value></tag><tag><tag>component</tag><value>credit</value></tag></tags><triggers><trigger><uuid>32994f2b06b8491b9b13d0b280e09001</uuid><expression>max(/AWS RDS instance by HTTP/aws.rds.cpu.credit_balance,5m)&lt;{$AWS.RDS.CPU.CREDIT.BALANCE.MIN.WARN}</expression><name>AWS RDS: Instance CPU Credit balance is too low</name><event_name>AWS RDS: Instance CPU Credit balance is too low (less {$AWS.RDS.CPU.CREDIT.BALANCE.MIN.WARN} for 5m)</event_name><opdata>Current value: {ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><description>The number of earned CPU credits has been less than {$AWS.RDS.CPU.CREDIT.BALANCE.MIN.WARN} in the last 5 minutes.</description><tags><tag><tag>scope</tag><value>capacity</value></tag></tags></trigger></triggers></item><item><uuid>14c1c44a312b4343b0ded785a7ae910c</uuid><name>AWS RDS: Credit CPU: Usage</name><type>DEPENDENT</type><key>aws.rds.cpu.credit_usage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of CPU credits consumed during the specified period, reported at 5-minute intervals.
+This metric measures the amount of time during which physical CPUs have been used for processing instructions by virtual CPUs allocated to the DB instance.
+
+This metric applies only to db.t2.small and db.t2.medium instances for Aurora MySQL, and to db.t3 instances for Aurora PostgreSQL</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;CPUCreditUsage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>cpu</value></tag><tag><tag>component</tag><value>credit</value></tag></tags></item><item><uuid>b69d180c94a34882bd3faa58f8847f65</uuid><name>AWS RDS: CPU: Utilization</name><type>DEPENDENT</type><key>aws.rds.cpu.utilization</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The percentage of CPU utilization.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;CPUUtilization&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>cpu</value></tag></tags><triggers><trigger><uuid>0272980a53e14f22b06db30af49a1233</uuid><expression>min(/AWS RDS instance by HTTP/aws.rds.cpu.utilization,15m)&gt;{$AWS.RDS.CPU.UTIL.WARN.MAX}</expression><name>AWS RDS: High CPU utilization</name><event_name>AWS RDS: High CPU utilization (over {$AWS.RDS.CPU.UTIL.WARN.MAX}% for 15m)</event_name><opdata>Current utilization: {ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><description>CPU utilization is too high. The system might be slow to respond.</description><tags><tag><tag>scope</tag><value>capacity</value></tag><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>8b4cbe054bd04d67bf7bcca006740599</uuid><name>AWS RDS: Create time</name><type>DEPENDENT</type><key>aws.rds.create_time</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>unixtime</units><description>Provides the date and time the DB instance was created.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$..InstanceCreateTime.first()</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>instance</value></tag></tags></item><item><uuid>9def6dbb88c249e8bdbac484f2e1cfb0</uuid><name>AWS RDS: Connections</name><type>DEPENDENT</type><key>aws.rds.database_connections</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of client network connections to the database instance.
+The number of database sessions can be higher than the metric value because the metric value doesn't include the following:
+
+- Sessions that no longer have a network connection but which the database hasn't cleaned up
+- Sessions created by the database engine for its own purposes
+- Sessions created by the database engine's parallel execution capabilities
+- Sessions created by the database engine job scheduler
+- Amazon Aurora/RDS connections</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DatabaseConnections&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>connections</value></tag></tags></item><item><uuid>a60833d27daf49329c58a4ca0d9affa5</uuid><name>AWS RDS: Disk: Queue depth</name><type>DEPENDENT</type><key>aws.rds.disk_queue_depth</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of outstanding read/write requests waiting to access the disk.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DiskQueueDepth&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>1fb56b1936024dfca328660471827ce2</uuid><name>AWS RDS: EBS: Byte balance</name><type>DEPENDENT</type><key>aws.rds.ebs_byte_balance</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The percentage of throughput credits remaining in the burst bucket of your RDS database. This metric is available for basic monitoring only.
+To find the instance sizes that support this metric, see the instance sizes with an asterisk (*) in the EBS optimized by default table (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-optimized.html#current) in Amazon RDS User Guide for Linux Instances.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;EBSByteBalance%&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>ebs</value></tag></tags><triggers><trigger><uuid>b878ee69a01a47a09677b184f8352668</uuid><expression>max(/AWS RDS instance by HTTP/aws.rds.ebs_byte_balance,5m)&lt;{$AWS.EBS.BYTE.CREDIT.BALANCE.MIN.WARN}</expression><name>AWS RDS: Byte Credit balance is too low</name><event_name>AWS RDS: Byte Credit balance is too low (less {$AWS.EBS.BYTE.CREDIT.BALANCE.MIN.WARN}% for 5m)</event_name><opdata>Current value: {ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>capacity</value></tag></tags></trigger></triggers></item><item><uuid>44eadf0d51244375a302110cb00e8e88</uuid><name>AWS RDS: EBS: IO balance</name><type>DEPENDENT</type><key>aws.rds.ebs_io_balance</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The percentage of I/O credits remaining in the burst bucket of your RDS database. This metric is available for basic monitoring only.
+To find the instance sizes that support this metric, see the instance sizes with an asterisk (*) in the EBS optimized by default table (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-optimized.html#current) in Amazon RDS User Guide for Linux Instances.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;EBSIOBalance%&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>ebs</value></tag></tags><triggers><trigger><uuid>556100b7e8414543bf88017e13fb718f</uuid><expression>max(/AWS RDS instance by HTTP/aws.rds.ebs_io_balance,5m)&lt;{$AWS.EBS.IO.CREDIT.BALANCE.MIN.WARN}</expression><name>AWS RDS: I/O Credit balance is too low</name><event_name>AWS RDS: I/O Credit balance is too low (less {$AWS.EBS.IO.CREDIT.BALANCE.MIN.WARN}% for 5m)</event_name><opdata>Current value: {ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>capacity</value></tag></tags></trigger></triggers></item><item><uuid>cad47e37ddc04100a8a7c3bca5f9049f</uuid><name>AWS RDS: Engine</name><type>DEPENDENT</type><key>aws.rds.engine</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Database engine.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$..Engine.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>instance</value></tag></tags></item><item><uuid>fefdac322230485cb792f295bb1420af</uuid><name>AWS RDS: Engine version</name><type>DEPENDENT</type><key>aws.rds.engine.version</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Indicates the database engine version.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$[*].EngineVersion.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>instance</value></tag></tags></item><item><uuid>5e83a36bcbf64098938ab7bb4725c39c</uuid><name>AWS RDS: Get events check</name><type>DEPENDENT</type><key>aws.rds.events.check</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Data collection check.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.error</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_events</key></master_item><tags><tag><tag>component</tag><value>status</value></tag></tags><triggers><trigger><uuid>600805420f704d4daca1ac20903f27f5</uuid><expression>length(last(/AWS RDS instance by HTTP/aws.rds.events.check))&gt;0</expression><name>AWS RDS: Failed to get events data</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>641677b6f7c147058b1e77967754028f</uuid><name>AWS RDS: SQLServer: Failed agent jobs</name><type>DEPENDENT</type><key>aws.rds.failed_sql_server_agent_jobs_count</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rpm</units><description>The number of failed Microsoft SQL Server Agent jobs during the last minute.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;FailedSQLServerAgentJobsCount&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>application</value></tag><tag><tag>engine</tag><value>sqlserver</value></tag></tags></item><item><uuid>df8b49f346f8468b887526700295a6c4</uuid><name>AWS RDS: Memory, freeable</name><type>DEPENDENT</type><key>aws.rds.freeable_memory</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The amount of available random access memory.
+
+For MariaDB, MySQL, Oracle, and PostgreSQL DB instances, this metric reports the value of the MemAvailable field of /proc/meminfo.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;FreeableMemory&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>memory</value></tag></tags></item><item><uuid>33dfd559dd93470cabf27f3a9a0968f1</uuid><name>AWS RDS: Storage: Local free</name><type>DEPENDENT</type><key>aws.rds.free_local_storage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The amount of local storage available, in bytes.
+
+Unlike for other DB engines, for Aurora DB instances this metric reports the amount of storage available to each DB instance. 
+This value depends on the DB instance class. You can increase the amount of free storage space for an instance by choosing a larger DB instance class for your instance.
+(This doesn't apply to Aurora Serverless v2.)</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;FreeLocalStorage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>fc3fbf1da0b9481c9eee00838c05157f</uuid><name>AWS RDS: Storage: Space free</name><type>DEPENDENT</type><key>aws.rds.free_storage_space</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The amount of available storage space.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;FreeStorageSpace&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>a2f85e777eae4fe789446de21136c510</uuid><name>AWS CloudWatch: Get instance alarms data</name><type>SCRIPT</type><key>aws.rds.get_alarms</key><delay>0s;m/1</delay><history>0</history><trends>0</trends><value_type>TEXT</value_type><params>var AwsRds = {
+    params: {},
+
+    setParams: function (params) {
+        ['access_key', 'secret_key', 'region', 'db_instance_id'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        AwsRds.params = params;
+    },
+
+    sign: function (key, message) {
+        var hex = hmac('sha256', key, message);
+
+        if ((hex.length % 2) === 1) {
+            throw 'Invalid length of a hex string!';
+        }
+
+        var result = new Int8Array(hex.length / 2);
+        for (var i = 0, b = 0; i &lt; hex.length; i += 2, b++) {
+            result[b] = parseInt(hex.substring(i, i + 2), 16);
+        }
+
+        return result;
+    },
+
+    prepareParams: function (params) {
+        var result = [];
+
+        Object.keys(params).sort().forEach(function (key) {
+            if (typeof params[key] !== 'object') {
+                result.push(key + '=' + encodeURIComponent(params[key]));
+            }
+            else {
+                result.push(prepareObject(key, params[key]));
+            }
+        });
+
+        return result.join('&amp;');
+    },
+
+    request: function (method, region, service, params, data) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var amzdate = (new Date()).toISOString().replace(/\.\d+Z/, 'Z').replace(/[-:]/g, ''),
+            date = amzdate.replace(/T\d+Z/, ''),
+            host = service + '.' + region + '.amazonaws.com',
+            canonical_uri = '/',
+            canonical_headers = 'content-encoding:amz-1.0\n' + 'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n',
+            signed_headers = 'content-encoding;host;x-amz-date',
+            canonical_request = method + '\n' + canonical_uri + '\n' + params + '\n' + canonical_headers + '\n' + signed_headers + '\n' + sha256(data),
+            credential_scope = date + '/' + region + '/' + service + '/' + 'aws4_request',
+            request_string = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + credential_scope + '\n' + sha256(canonical_request),
+            key = AwsRds.sign('AWS4' + AwsRds.params.secret_key, date);
+
+        key = AwsRds.sign(key, region);
+        key = AwsRds.sign(key, service);
+        key = AwsRds.sign(key, 'aws4_request');
+
+        var request = new HttpRequest(),
+            url = 'https://' + host + canonical_uri + '?' + params;
+
+        if (typeof AwsRds.params.proxy !== 'undefined' &amp;&amp; AwsRds.params.proxy !== '') {
+            request.setProxy(AwsRds.params.proxy);
+        }
+        request.addHeader('x-amz-date: ' + amzdate);
+        request.addHeader('Accept: application/json');
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Content-Encoding: amz-1.0');
+        request.addHeader('Authorization: ' + 'AWS4-HMAC-SHA256 Credential=' + AwsRds.params.access_key + '/' + credential_scope + ', ' + 'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + hmac('sha256', key, request_string));
+
+        Zabbix.log(4, '[ AWS RDS ] Sending request: ' + url);
+
+        response = request.get(url);
+
+        Zabbix.log(4, '[ AWS RDS ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        if (response[0] === '&lt;') {
+            try {
+                response = XML.toJson(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS CloudWatch API. Check debug log for more information.';
+            }
+        }
+
+        if (response !== null) {
+            try {
+                response = JSON.parse(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS CloudWatch API. Check debug log for more information.';
+            }
+        }
+
+        return response;
+    },
+
+    getAlarms: function () {
+        var payload = {},
+            result = [];
+
+        payload['Action'] = 'DescribeAlarms';
+        payload['MaxRecords'] = 100;
+        payload['Version'] = '2010-08-01';
+
+        while (payload.NextToken !== '') {
+            var alarms = AwsRds.request('GET', AwsRds.params.region, 'monitoring', AwsRds.prepareParams(payload));
+
+            if (typeof alarms !== 'object'
+                || typeof alarms.DescribeAlarmsResponse !== 'object'
+                || typeof alarms.DescribeAlarmsResponse.DescribeAlarmsResult !== 'object'
+                || typeof alarms.DescribeAlarmsResponse.DescribeAlarmsResult.MetricAlarms !== 'object') {
+                throw 'Cannot get alarms from AWS CloudWatch API. Check debug log for more information.';
+            }
+
+            payload.NextToken = alarms.DescribeAlarmsResponse.DescribeAlarmsResult.NextToken || '';
+
+            if (!Array.isArray(alarms.DescribeAlarmsResponse.DescribeAlarmsResult.MetricAlarms))
+                alarms.DescribeAlarmsResponse.DescribeAlarmsResult.MetricAlarms = [alarms.DescribeAlarmsResponse.DescribeAlarmsResult.MetricAlarms]
+            alarms.DescribeAlarmsResponse.DescribeAlarmsResult.MetricAlarms.forEach(function (alarm) {
+                var dimensions = alarm.Dimensions;
+
+                if (Array.isArray(alarm.Metrics)) {
+                    alarm.Metrics.forEach(function (metric) {
+                        if (typeof metric.MetricStat === 'object' &amp;&amp; metric.MetricStat !== null
+                            &amp;&amp; typeof metric.MetricStat.Metric === 'object' &amp;&amp; metric.MetricStat.Metric !== null
+                            &amp;&amp; Array.isArray(metric.MetricStat.Metric.Dimensions)) {
+                            dimensions = dimensions.concat(metric.MetricStat.Metric.Dimensions);
+                        }
+                    });
+                }
+                for (var i in dimensions) {
+                    if (dimensions[i].Name === 'DBInstanceIdentifier' &amp;&amp; dimensions[i].Value === AwsRds.params.db_instance_id) {
+                        result.push(alarm);
+                        break;
+                    }
+                }
+            });
+        }
+
+        return result;
+    }
+}
+
+try {
+    AwsRds.setParams(JSON.parse(value));
+
+    return JSON.stringify(AwsRds.getAlarms());
+}
+catch (error) {
+    error += (String(error).endsWith('.')) ? '' : '.';
+    Zabbix.log(3, '[ AWS RDS ] ERROR: ' + error);
+
+    return JSON.stringify({ 'error': error });
+}</params><description>DescribeAlarms API method: https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_DescribeAlarms.html</description><preprocessing><step><type>CHECK_NOT_SUPPORTED</type><parameters><parameter/></parameters></step></preprocessing><timeout>15s</timeout><parameters><parameter><name>access_key</name><value>{$AWS.ACCESS.KEY.ID}</value></parameter><parameter><name>secret_key</name><value>{$AWS.SECRET.ACCESS.KEY}</value></parameter><parameter><name>region</name><value>{$AWS.REGION}</value></parameter><parameter><name>db_instance_id</name><value>{$AWS.RDS.INSTANCE.ID}</value></parameter><parameter><name>proxy</name><value>{$AWS.PROXY}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>f0d1041fa09d4ba38c9d0b39c4b76b0b</uuid><name>AWS RDS: Get instance events data</name><type>SCRIPT</type><key>aws.rds.get_events</key><delay>0s;m/10</delay><history>0</history><trends>0</trends><value_type>TEXT</value_type><params>var AwsRds = {
+    params: {},
+
+    setParams: function (params) {
+        ['access_key', 'secret_key', 'region', 'db_instance_id'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        AwsRds.params = params;
+    },
+
+    sign: function (key, message) {
+        var hex = hmac('sha256', key, message);
+
+        if ((hex.length % 2) === 1) {
+            throw 'Invalid length of a hex string!';
+        }
+
+        var result = new Int8Array(hex.length / 2);
+        for (var i = 0, b = 0; i &lt; hex.length; i += 2, b++) {
+            result[b] = parseInt(hex.substring(i, i + 2), 16);
+        }
+
+        return result;
+    },
+
+    prepareParams: function (params) {
+        var result = [];
+
+        Object.keys(params).sort().forEach(function (key) {
+            if (typeof params[key] !== 'object') {
+                result.push(key + '=' + encodeURIComponent(params[key]));
+            }
+            else {
+                result.push(prepareObject(key, params[key]));
+            }
+        });
+
+        return result.join('&amp;');
+    },
+
+    request: function (method, region, service, params, data) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var amzdate = (new Date()).toISOString().replace(/\.\d+Z/, 'Z').replace(/[-:]/g, ''),
+            date = amzdate.replace(/T\d+Z/, ''),
+            host = service + '.' + region + '.amazonaws.com',
+            canonical_uri = '/',
+            canonical_headers = 'content-encoding:amz-1.0\n' + 'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n',
+            signed_headers = 'content-encoding;host;x-amz-date',
+            canonical_request = method + '\n' + canonical_uri + '\n' + params + '\n' + canonical_headers + '\n' + signed_headers + '\n' + sha256(data),
+            credential_scope = date + '/' + region + '/' + service + '/' + 'aws4_request',
+            request_string = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + credential_scope + '\n' + sha256(canonical_request),
+            key = AwsRds.sign('AWS4' + AwsRds.params.secret_key, date);
+
+        key = AwsRds.sign(key, region);
+        key = AwsRds.sign(key, service);
+        key = AwsRds.sign(key, 'aws4_request');
+
+        var request = new HttpRequest(),
+            url = 'https://' + host + canonical_uri + '?' + params;
+
+        if (typeof AwsRds.params.proxy !== 'undefined' &amp;&amp; AwsRds.params.proxy !== '') {
+            request.setProxy(AwsRds.params.proxy);
+        }
+        request.addHeader('x-amz-date: ' + amzdate);
+        request.addHeader('Accept: application/json');
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Content-Encoding: amz-1.0');
+        request.addHeader('Authorization: ' + 'AWS4-HMAC-SHA256 Credential=' + AwsRds.params.access_key + '/' + credential_scope + ', ' + 'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + hmac('sha256', key, request_string));
+
+        Zabbix.log(4, '[ AWS RDS ] Sending request: ' + url);
+
+        response = request.get(url);
+
+        Zabbix.log(4, '[ AWS RDS ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        if (response[0] === '&lt;') {
+            try {
+                response = XML.toJson(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS RDS API. Check debug log for more information.';
+            }
+        }
+
+        if (response !== null) {
+            try {
+                response = JSON.parse(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS RDS API. Check debug log for more information.';
+            }
+        }
+
+        return response;
+    },
+
+    getEvents: function () {
+        var payload = {},
+            result = [];
+
+        payload['Action'] = 'DescribeEvents';
+        payload['MaxRecords'] = 100;
+        payload['Version'] = '2014-09-01';
+        payload['Duration'] = 30;
+        payload['SourceType'] = 'db-instance';
+        payload['SourceIdentifier'] = AwsRds.params.db_instance_id;
+
+        while (payload.NextToken !== '') {
+            var events = AwsRds.request('GET', AwsRds.params.region, 'rds', AwsRds.prepareParams(payload));
+
+            if (typeof events !== 'object'
+                || typeof events.DescribeEventsResponse !== 'object'
+                || typeof events.DescribeEventsResponse.DescribeEventsResult !== 'object'
+                || typeof events.DescribeEventsResponse.DescribeEventsResult.Events !== 'object') {
+                throw 'Cannot get events from AWS RDS API. Check debug log for more information.';
+            }
+
+            if (!Array.isArray(events.DescribeEventsResponse.DescribeEventsResult.Events))
+                events.DescribeEventsResponse.DescribeEventsResult.Events = [events.DescribeEventsResponse.DescribeEventsResult.Events]
+            events.DescribeEventsResponse.DescribeEventsResult.Events.forEach(function (event) {
+                event.EventCategories = event.EventCategories.toString()
+                result.push(event)
+            });
+            payload.NextToken = events.DescribeEventsResponse.DescribeEventsResult.NextToken || '';
+
+        };
+
+        return result;
+        }
+      }
+
+    try {
+        AwsRds.setParams(JSON.parse(value));
+
+        return JSON.stringify(AwsRds.getEvents());
+      }
+    catch (error) {
+        error += (String(error).endsWith('.')) ? '' : '.';
+        Zabbix.log(3, '[ AWS RDS ] ERROR: ' + error);
+
+        return JSON.stringify({ 'error': error });
+    }</params><description>DescribeEvents API method: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_DescribeEvents.html</description><preprocessing><step><type>CHECK_NOT_SUPPORTED</type><parameters><parameter/></parameters></step></preprocessing><timeout>15s</timeout><parameters><parameter><name>access_key</name><value>{$AWS.ACCESS.KEY.ID}</value></parameter><parameter><name>secret_key</name><value>{$AWS.SECRET.ACCESS.KEY}</value></parameter><parameter><name>region</name><value>{$AWS.REGION}</value></parameter><parameter><name>db_instance_id</name><value>{$AWS.RDS.INSTANCE.ID}</value></parameter><parameter><name>proxy</name><value>{$AWS.PROXY}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>85ac4a5313994e0f94fe6480d3c85193</uuid><name>AWS RDS: Get instance info</name><type>SCRIPT</type><key>aws.rds.get_instance_info</key><delay>5m</delay><history>0</history><trends>0</trends><value_type>TEXT</value_type><params>var AwsRds = {
+    params: {},
+    request_period: 600,
+
+    setParams: function (params) {
+        ['access_key', 'secret_key', 'region', 'db_instance_id'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        AwsRds.params = params;
+    },
+
+    sign: function (key, message) {
+        var hex = hmac('sha256', key, message);
+
+        if ((hex.length % 2) === 1) {
+            throw 'Invalid length of a hex string!';
+        }
+
+        var result = new Int8Array(hex.length / 2);
+        for (var i = 0, b = 0; i &lt; hex.length; i += 2, b++) {
+            result[b] = parseInt(hex.substring(i, i + 2), 16);
+        }
+
+        return result;
+    },
+
+    prepareParams: function (params) {
+        var result = [];
+
+        Object.keys(params).sort().forEach(function (key) {
+            if (typeof params[key] !== 'object') {
+                result.push(key + '=' + encodeURIComponent(params[key]));
+            }
+            else {
+                result.push(prepareObject(key, params[key]));
+            }
+        });
+
+        return result.join('&amp;');
+    },
+
+    request: function (method, region, service, params, data) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var amzdate = (new Date()).toISOString().replace(/\.\d+Z/, 'Z').replace(/[-:]/g, ''),
+            date = amzdate.replace(/T\d+Z/, ''),
+            host = service + '.' + region + '.amazonaws.com',
+            canonical_uri = '/',
+            canonical_headers = 'content-encoding:amz-1.0\n' + 'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n',
+            signed_headers = 'content-encoding;host;x-amz-date',
+            canonical_request = method + '\n' + canonical_uri + '\n' + params + '\n' + canonical_headers + '\n' + signed_headers + '\n' + sha256(data),
+            credential_scope = date + '/' + region + '/' + service + '/' + 'aws4_request',
+            request_string = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + credential_scope + '\n' + sha256(canonical_request),
+            key = AwsRds.sign('AWS4' + AwsRds.params.secret_key, date);
+
+        key = AwsRds.sign(key, region);
+        key = AwsRds.sign(key, service);
+        key = AwsRds.sign(key, 'aws4_request');
+
+        var request = new HttpRequest(),
+            url = 'https://' + host + canonical_uri + '?' + params;
+
+        if (typeof AwsRds.params.proxy !== 'undefined' &amp;&amp; AwsRds.params.proxy !== '') {
+            request.setProxy(AwsRds.params.proxy);
+        }
+        request.addHeader('x-amz-date: ' + amzdate);
+        request.addHeader('Accept: application/json');
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Content-Encoding: amz-1.0');
+        request.addHeader('Authorization: ' + 'AWS4-HMAC-SHA256 Credential=' + AwsRds.params.access_key + '/' + credential_scope + ', ' + 'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + hmac('sha256', key, request_string));
+
+        Zabbix.log(4, '[ AWS RDS ] Sending request: ' + url);
+
+        response = request.get(url);
+
+        Zabbix.log(4, '[ AWS RDS ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        if (response !== null) {
+            try {
+                response = JSON.parse(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS RDS API. Check debug log for more information.';
+            }
+        }
+        return response;
+    },
+
+    getInstanceData: function () {
+        var payload = {};
+
+        payload['Action'] = 'DescribeDBInstances',
+            payload['Version'] = '2014-10-31',
+            payload['DBInstanceIdentifier'] = AwsRds.params.db_instance_id;
+
+        result = AwsRds.request('GET', AwsRds.params.region, 'rds', AwsRds.prepareParams(payload));
+        if (typeof result !== 'object'
+            || typeof result.DescribeDBInstancesResponse !== 'object'
+            || typeof result.DescribeDBInstancesResponse.DescribeDBInstancesResult !== 'object'
+            || typeof result.DescribeDBInstancesResponse.DescribeDBInstancesResult.DBInstances !== 'object') {
+            throw 'Cannot get metrics data from AWS RDS API. Check debug log for more information.';
+        }
+
+        return result.DescribeDBInstancesResponse.DescribeDBInstancesResult.DBInstances;
+    }
+};
+
+try {
+    AwsRds.setParams(JSON.parse(value));
+
+    return JSON.stringify(AwsRds.getInstanceData());
+}
+catch (error) {
+    error += (String(error).endsWith('.')) ? '' : '.';
+    Zabbix.log(3, '[ AWS RDS ] ERROR: ' + error);
+    return JSON.stringify({ 'error': error });
+}</params><description>Get instance info.
+DescribeDBInstances API method: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_DescribeDBInstances.html</description><preprocessing><step><type>CHECK_NOT_SUPPORTED</type><parameters><parameter/></parameters></step></preprocessing><timeout>15s</timeout><parameters><parameter><name>access_key</name><value>{$AWS.ACCESS.KEY.ID}</value></parameter><parameter><name>secret_key</name><value>{$AWS.SECRET.ACCESS.KEY}</value></parameter><parameter><name>region</name><value>{$AWS.REGION}</value></parameter><parameter><name>db_instance_id</name><value>{$AWS.RDS.INSTANCE.ID}</value></parameter><parameter><name>proxy</name><value>{$AWS.PROXY}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>b22171fe7de44ac3952468ceb0c1a9b0</uuid><name>AWS RDS: Get metrics data</name><type>SCRIPT</type><key>aws.rds.get_metrics</key><delay>0s;m/5</delay><history>0</history><trends>0</trends><value_type>TEXT</value_type><params>var AwsRds = {
+    params: {},
+    request_period: 600,
+
+    setParams: function (params) {
+        ['access_key', 'secret_key', 'region', 'db_instance_id'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: &quot;' + field + '&quot;.';
+            }
+        });
+
+        AwsRds.params = params;
+    },
+
+    sign: function (key, message) {
+        var hex = hmac('sha256', key, message);
+
+        if ((hex.length % 2) === 1) {
+            throw 'Invalid length of a hex string!';
+        }
+
+        var result = new Int8Array(hex.length / 2);
+        for (var i = 0, b = 0; i &lt; hex.length; i += 2, b++) {
+            result[b] = parseInt(hex.substring(i, i + 2), 16);
+        }
+
+        return result;
+    },
+
+    renderMetricQuery: function (period, db_instance_id) {
+        var metrics_list = [
+          'AbortedClients:Count',
+          'ActiveTransactions:Count/Second',
+          'AuroraBinlogReplicaLag:Seconds',
+          'AuroraReplicaLag:Milliseconds',
+          'AuroraReplicaLagMaximum:Milliseconds',
+          'AuroraReplicaLagMinimum:Milliseconds',
+          'BacktrackWindowActual:Count',
+          'BacktrackWindowAlert:Count',
+          'BinLogDiskUsage:Bytes',
+          'BlockedTransactions:Count/Second',
+          'BufferCacheHitRatio:Percent',
+          'CheckpointLag:Seconds',
+          'CommitLatency:Milliseconds',
+          'CommitThroughput:Count/Second',
+          'CPUCreditBalance:Count',
+          'CPUCreditUsage:Count',
+          'CPUUtilization:Percent',
+          'DatabaseConnections:Count',
+          'DDLLatency:Milliseconds',
+          'DDLThroughput:Count/Second',
+          'Deadlocks:Count/Second',
+          'DeleteLatency:Milliseconds',
+          'DeleteThroughput:Count/Second',
+          'DiskQueueDepth:Count',
+          'DMLLatency:Milliseconds',
+          'DMLThroughput:Count/Second',
+          'EBSByteBalance%:Percent',
+          'EBSIOBalance%:Percent',
+          'EngineUptime:Seconds',
+          'FailedSQLServerAgentJobsCount:Count/Second',
+          'FreeableMemory:Bytes',
+          'FreeLocalStorage:Bytes',
+          'InsertLatency:Milliseconds',
+          'InsertThroughput:Count/Second',
+          'LoginFailures:Count/Second',
+          'MaximumUsedTransactionIDs:Count',
+          'NetworkReceiveThroughput:Bytes/Second',
+          'NetworkThroughput:Bytes/Second',
+          'NetworkTransmitThroughput:Bytes/Second',
+          'NumBinaryLogFiles:Count',
+          'Queries:Count/Second',
+          'RDSToAuroraPostgreSQLReplicaLag:Seconds',
+          'ReadIOPS:Count/Second',
+          'ReadLatency:Seconds',
+          'ReadLatencyLocalStorage:Seconds',
+          'ReadThroughput:Bytes/Second',
+          'ReadThroughputLocalStorage:Bytes/Second',
+          'ReplicationSlotDiskUsage:Bytes',
+          'ResultSetCacheHitRatio:Percent',
+          'RollbackSegmentHistoryListLength:Count',
+          'RowLockTime:Milliseconds',
+          'SelectLatency:Milliseconds',
+          'SelectThroughput:Count/Second',
+          'StorageNetworkReceiveThroughput:Bytes/Second',
+          'StorageNetworkThroughput:Bytes/Second',
+          'StorageNetworkTransmitThroughput:Bytes/Second',
+          'SumBinaryLogSize:Bytes',
+          'SwapUsage:Bytes',
+          'TransactionLogsDiskUsage:Bytes',
+          'UpdateLatency:Milliseconds',
+          'UpdateThroughput:Count/Second',
+          'WriteIOPS:Count/Second',
+          'WriteLatency:Seconds',
+          'WriteThroughput:Bytes/Second',
+          'BurstBalance:Percent',
+          'FreeStorageSpace:Percent',
+          'OldestReplicationSlotLag:Bytes',
+          'ReplicaLag:Seconds',
+          'TransactionLogsGeneration:Bytes/Second'
+        ];
+
+        var metric_payload = [];
+        metrics_list.forEach(function (metric) {
+            var parts = metric.split(':', 2);
+            var name = parts[0].replace(/[^a-zA-Z0-9]/g, '');
+            metric_payload.push({
+                'Id': name.charAt(0).toLowerCase() + name.slice(1),
+                'MetricStat': {
+                    'Metric': {
+                        'MetricName': parts[0],
+                        'Namespace': 'AWS/RDS',
+                        'Dimensions': [
+                            {
+                                'Name': 'DBInstanceIdentifier',
+                                'Value': db_instance_id
+                            }
+                        ]
+                    },
+                    'Period': period,
+                    'Stat': 'Average',
+                    'Unit': parts[1]
+                }
+            });
+        });
+
+        return metric_payload;
+
+    },
+    prepareParams: function (params) {
+        var result = [];
+
+        Object.keys(params).sort().forEach(function (key) {
+            if (typeof params[key] !== 'object') {
+                result.push(key + '=' + encodeURIComponent(params[key]));
+            }
+            else {
+                result.push(prepareObject(key, params[key]));
+            }
+        });
+
+        return result.join('&amp;');
+    },
+
+    request: function (method, region, service, request_data) {
+        if (typeof request_data === 'undefined' || request_data === null) {
+            request_data = '';
+        }
+        else {
+            request_data=  JSON.stringify(request_data)
+        }
+
+        var amzdate = (new Date()).toISOString().replace(/\.\d+Z/, 'Z').replace(/[-:]/g, ''),
+            date = amzdate.replace(/T\d+Z/, ''),
+            host = service + '.' + region + '.amazonaws.com',
+            canonical_uri = '/',
+            canonical_headers = 'content-encoding:amz-1.0\n' + 'host:' + host + '\n' + 'x-amz-date:' + amzdate + '\n',
+            signed_headers = 'content-encoding;host;x-amz-date',
+            canonical_request = method + '\n' + canonical_uri + '\n' + '\n' + canonical_headers + '\n' + signed_headers + '\n' + sha256(request_data),
+            credential_scope = date + '/' + region + '/' + service + '/' + 'aws4_request',
+            request_string = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + credential_scope + '\n' + sha256(canonical_request),
+            key = AwsRds.sign('AWS4' + AwsRds.params.secret_key, date);
+
+        key = AwsRds.sign(key, region);
+        key = AwsRds.sign(key, service);
+        key = AwsRds.sign(key, 'aws4_request');
+
+        var request = new HttpRequest(),
+            url = 'https://' + host + canonical_uri;
+
+        if (typeof AwsRds.params.proxy !== 'undefined' &amp;&amp; AwsRds.params.proxy !== '') {
+            request.setProxy(AwsRds.params.proxy);
+        }
+        request.addHeader('x-amz-date: ' + amzdate);
+        request.addHeader('X-Amz-Target: GraniteServiceVersion20100801.GetMetricData')
+        request.addHeader('Accept: application/json');
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Content-Encoding: amz-1.0');
+        request.addHeader('Authorization: ' + 'AWS4-HMAC-SHA256 Credential=' + AwsRds.params.access_key + '/' + credential_scope + ', ' + 'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + hmac('sha256', key, request_string));
+
+        Zabbix.log(4, '[ AWS RDS ] Sending request: ' + url);
+
+        response = request.post(url,request_data);
+        Zabbix.log(4, '[ AWS RDS ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        if (response !== null) {
+            try {
+                response = JSON.parse(response);
+            }
+            catch (error) {
+                throw 'Failed to parse response received from AWS CloudWatch API. Check debug log for more information.';
+            }
+        }
+
+        return response;
+    },
+
+    getMetricsData: function () {
+        var payload={},
+            end_time = Math.floor((new Date().getTime())/1000),
+            start_time = end_time - AwsRds.request_period;
+
+        payload['StartTime'] = start_time;
+        payload['EndTime'] = end_time;
+        payload['ScanBy'] = 'TimestampDescending';
+        payload['MetricDataQueries'] = AwsRds.renderMetricQuery(AwsRds.request_period, AwsRds.params.db_instance_id);
+        result = AwsRds.request('POST', AwsRds.params.region, 'monitoring', payload);
+        if (typeof result !== 'object' || typeof result.MetricDataResults !== 'object') {
+            throw 'Cannot get metrics data from AWS CloudWatch API. Check debug log for more information.';
+        }
+
+        return result.MetricDataResults;
+    }
+};
+
+try {
+    AwsRds.setParams(JSON.parse(value));
+
+    return JSON.stringify(AwsRds.getMetricsData());
+}
+catch (error) {
+    error += (String(error).endsWith('.')) ? '' : '.';
+    Zabbix.log(3, '[ AWS RDS ] ERROR: ' + error);
+
+    return JSON.stringify({'error': error});
+}</params><description>Get instance metrics.
+Full metrics list related to RDS: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html
+Full metrics list related to Amazon Aurora: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.AuroraMySQL.Monitoring.Metrics.html#Aurora.AuroraMySQL.Monitoring.Metrics.instances</description><preprocessing><step><type>CHECK_NOT_SUPPORTED</type><parameters><parameter/></parameters></step></preprocessing><timeout>15s</timeout><parameters><parameter><name>access_key</name><value>{$AWS.ACCESS.KEY.ID}</value></parameter><parameter><name>secret_key</name><value>{$AWS.SECRET.ACCESS.KEY}</value></parameter><parameter><name>region</name><value>{$AWS.REGION}</value></parameter><parameter><name>db_instance_id</name><value>{$AWS.RDS.INSTANCE.ID}</value></parameter><parameter><name>proxy</name><value>{$AWS.PROXY}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>72fb52bfbcf44ad58df0d49525654cde</uuid><name>AWS RDS: Get instance info check</name><type>DEPENDENT</type><key>aws.rds.instance_info.check</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Data collection check.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.error</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>status</value></tag></tags><triggers><trigger><uuid>452195309f1f4211aeb71b43a373f86f</uuid><expression>length(last(/AWS RDS instance by HTTP/aws.rds.instance_info.check))&gt;0</expression><name>AWS RDS: Failed to get instance data</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>8f651a01cd1d4639b6a4ef443285b24c</uuid><name>AWS RDS: Get metrics check</name><type>DEPENDENT</type><key>aws.rds.metrics.check</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Data collection check.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.error</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>status</value></tag></tags><triggers><trigger><uuid>54c70842bf314ce2a9c95e0cfc57cc21</uuid><expression>length(last(/AWS RDS instance by HTTP/aws.rds.metrics.check))&gt;0</expression><name>AWS RDS: Failed to get metrics data</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>4d5ce2d0bb0648a6b4e4df98dc20fb49</uuid><name>AWS RDS: Network: Receive throughput</name><type>DEPENDENT</type><key>aws.rds.network_receive_throughput.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The incoming (Receive) network traffic on the DB instance, including both customer database traffic and Amazon RDS traffic used for monitoring and replication.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;NetworkReceiveThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>8de924155ca646e0a63de9fb4184e2b7</uuid><name>AWS RDS: Network: Throughput</name><type>DEPENDENT</type><key>aws.rds.network_throughput.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The amount of network throughput both received from and transmitted to clients by each instance in the Aurora MySQL DB cluster, in bytes per second. This throughput doesn't include network traffic between instances in the DB cluster and the cluster volume.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;NetworkThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>a97083537fce49c99caf71d1b0b2926f</uuid><name>AWS RDS: Network: Transmit throughput</name><type>DEPENDENT</type><key>aws.rds.network_transmit_throughput.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The outgoing (Transmit) network traffic on the DB instance, including both customer database traffic and Amazon RDS traffic used for monitoring and replication.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;NetworkTransmitThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>3f9ac8ce149e4fb2a65580941c4d5428</uuid><name>AWS RDS: Disk: Read IOPS</name><type>DEPENDENT</type><key>aws.rds.read_iops.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of disk I/O operations per second. Aurora PostgreSQL-Compatible Edition reports read and write IOPS separately, in 1-minute intervals.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ReadIOPS&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>bd55865999364de890e87da30676adea</uuid><name>AWS RDS: Disk: Read IOPS, local storage</name><type>DEPENDENT</type><key>aws.rds.read_iops_local_storage.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of disk read I/O operations to local storage per second. Only applies to Multi-AZ DB clusters.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ReadIOPSLocalStorage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>3ad5d0d0bbbb4e579c74dd54923ccd8b</uuid><name>AWS RDS: Disk: Read latency</name><type>DEPENDENT</type><key>aws.rds.read_latency</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The average amount of time taken per disk I/O operation.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ReadLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>2d85eb0d8e2641bf95b3c5dbbb125089</uuid><name>AWS RDS: Disk: Read latency, local storage</name><type>DEPENDENT</type><key>aws.rds.read_latency_local_storage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The average amount of time taken per disk I/O operation for local storage. Only applies to Multi-AZ DB clusters.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ReadLatencyLocalStorage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>9253279ef6c34d86a2b1750c8d8b29d0</uuid><name>AWS RDS: Read replica: State</name><type>DEPENDENT</type><key>aws.rds.read_replica_state</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>The status of a read replica. If the instance isn't a read replica, this is blank.
+Boolean value that is true if the instance is operating normally, or false if the instance is in an error state.</description><valuemap><name>Read replica state</name></valuemap><preprocessing><step><type>JSONPATH</type><parameters><parameter>$..StatusInfos..Normal.first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step><step><type>BOOL_TO_DECIMAL</type><parameters><parameter/></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag></tags><triggers><trigger><uuid>1f4767ba167f43b7ae9730ec834152a4</uuid><expression>last(/AWS RDS instance by HTTP/aws.rds.read_replica_state)=0</expression><name>AWS RDS: Read replica in error state</name><priority>AVERAGE</priority><description>The status of a read replica.
+False if the instance is in an error state.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>8fd266a7e4744395b21638b58c939072</uuid><name>AWS RDS: Read replica: Status</name><type>DEPENDENT</type><key>aws.rds.read_replica_status</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>The status of a read replica. If the instance isn't a read replica, this is blank.
+Status of the DB instance. For a StatusType of read replica, the values can be replicating, replication stop point set, replication stop point reached, error, stopped, or terminated.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$..StatusInfos..Status.first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag></tags></item><item><uuid>14b63bcb60fd4c91b87357d3f77e71df</uuid><name>AWS RDS: Disk: Read throughput</name><type>DEPENDENT</type><key>aws.rds.read_throughput.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The average number of bytes read from disk per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ReadThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>bc963bae1664421c8874d77b085006a6</uuid><name>AWS RDS: Disk: Read throughput, local storage</name><type>DEPENDENT</type><key>aws.rds.read_throughput_local_storage.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The average number of bytes read from disk per second for local storage. Only applies to Multi-AZ DB clusters.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ReadThroughputLocalStorage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>7be22cd083bc401bbbd2d75f2f6816de</uuid><name>AWS RDS: Replication: Lag</name><type>DEPENDENT</type><key>aws.rds.replica_lag</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The amount of time a read replica DB instance lags behind the source DB instance. Applies to MySQL, MariaDB, Oracle, PostgreSQL, and SQL Server read replicas.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ReplicaLag&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag><tag><tag>engine</tag><value>mariadb</value></tag><tag><tag>engine</tag><value>mysql</value></tag><tag><tag>engine</tag><value>oracle</value></tag><tag><tag>engine</tag><value>postgres</value></tag><tag><tag>engine</tag><value>sqlserver</value></tag></tags></item><item><uuid>f6fe45dc205241cb99b1822d3f78cce6</uuid><name>AWS RDS: Status</name><type>DEPENDENT</type><key>aws.rds.status</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Specifies the current state of this database.
+All possible status values and their description: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/accessing-monitoring.html#Overview.DBInstance.Status</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$..DBInstanceStatus.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>instance</value></tag></tags></item><item><uuid>2694163a440f40e4a5ec41111f9abf59</uuid><name>AWS RDS: Storage: Allocated</name><type>DEPENDENT</type><key>aws.rds.storage.allocated</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>!GiB</units><description>Specifies the allocated storage size specified in gibibytes (GiB).</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$[*].AllocatedStorage.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item><item><uuid>1aafa7a752274a1abb30b7b2e067b857</uuid><name>AWS RDS: Storage: Max allocated</name><type>DEPENDENT</type><key>aws.rds.storage.max_allocated</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>!GiB</units><description>The upper limit in gibibytes (GiB) to which Amazon RDS can automatically scale the storage of the DB instance.
+If limit is not specified returns -1.</description><preprocessing><step><type>JAVASCRIPT</type><parameters><parameter>var data = JSON.parse(value)
+return (typeof data.MaxAllocatedStorage === 'undefined') ? -1 : data.MaxAllocatedStorage</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item><item><uuid>842f80f586794da39562ceb3cb09d5a4</uuid><name>AWS RDS: Network: Receive throughput</name><type>DEPENDENT</type><key>aws.rds.storage_network_receive_throughput</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The incoming (receive) network traffic on the DB instance, including both customer database traffic and Amazon RDS traffic used for monitoring and replication.
+For Amazon Aurora: The amount of network throughput received from the Aurora storage subsystem by each instance in the DB cluster.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;StorageNetworkReceiveThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>bab141cde0114edf8b02211565df5b1f</uuid><name>AWS RDS: Network: Transmit throughput</name><type>DEPENDENT</type><key>aws.rds.storage_network_transmit_throughput</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The outgoing (transmit) network traffic on the DB instance, including both customer database traffic and Amazon RDS traffic used for monitoring and replication.
+For Amazon Aurora: The amount of network throughput sent to the Aurora storage subsystem by each instance in the Aurora MySQL DB cluster.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;StorageNetworkTransmitThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>6b3a8fd76fe6466395dcc4926d7177b4</uuid><name>AWS RDS: Storage type</name><type>DEPENDENT</type><key>aws.rds.storage_type</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>Specifies the storage type associated with DB instance.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$[*].StorageType.first()</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_instance_info</key></master_item><tags><tag><tag>component</tag><value>instance</value></tag></tags></item><item><uuid>f9d1a5169ec54f648937eac63b3ebcbb</uuid><name>AWS RDS: Swap usage</name><type>DEPENDENT</type><key>aws.rds.swap_usage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The amount of swap space used. 
+This metric is available for the Aurora PostgreSQL DB instance classes db.t3.medium, db.t3.large, db.r4.large, db.r4.xlarge, db.r5.large, db.r5.xlarge, db.r6g.large, and db.r6g.xlarge. 
+For Aurora MySQL, this metric applies only to db.t* DB instance classes.
+This metric is not available for SQL Server.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;SwapUsage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>memory</value></tag></tags></item><item><uuid>a64c2caccd884f0f9bb7c9c9295baf45</uuid><name>AWS RDS: Disk: Write IOPS</name><type>DEPENDENT</type><key>aws.rds.write_iops.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The number of write records generated per second. This is more or less the number of log records generated by the database. These do not correspond to 8K page writes, and do not correspond to network packets sent.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;WriteIOPS&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>19dc221c59ec4587af496bd644830869</uuid><name>AWS RDS: Disk: Write IOPS, local storage</name><type>DEPENDENT</type><key>aws.rds.write_iops_local_storage.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of disk write I/O operations per second on local storage in a Multi-AZ DB cluster.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;WriteIOPSLocalStorage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>57e84381425d4706a2bcea41e0373157</uuid><name>AWS RDS: Disk: Write latency</name><type>DEPENDENT</type><key>aws.rds.write_latency</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The average amount of time taken per disk I/O operation.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;WriteLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>b34b656492e8479ea03b97815d368752</uuid><name>AWS RDS: Disk: Write latency, local storage</name><type>DEPENDENT</type><key>aws.rds.write_latency_local_storage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The average amount of time taken per disk I/O operation on local storage in a Multi-AZ DB cluster.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;WriteLatencyLocalStorage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>db6932f63f7843508bb9e5559a69e8c3</uuid><name>AWS RDS: Disk: Write throughput</name><type>DEPENDENT</type><key>aws.rds.write_throughput.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The average number of bytes written to persistent storage every second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;WriteThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item><item><uuid>f30df9f386be49948bce7817d56dae09</uuid><name>AWS RDS: Disk: Write throughput, local storage</name><type>DEPENDENT</type><key>aws.rds.write_throughput_local_storage.rate</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The average number of bytes written to disk per second for local storage.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;WriteThroughputLocalStorage&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>disk</value></tag></tags></item></items><discovery_rules><discovery_rule><uuid>29b2b32b0d82450393f77ec7e093ef81</uuid><name>Instance Alarms discovery</name><type>DEPENDENT</type><key>aws.rds.alarms.discovery</key><delay>0</delay><filter><evaltype>AND</evaltype><conditions><condition><macro>{#ALARM_SERVICE_NAMESPACE}</macro><value>{$AWS.RDS.LLD.FILTER.ALARM_SERVICE_NAMESPACE.MATCHES}</value><formulaid>C</formulaid></condition><condition><macro>{#ALARM_SERVICE_NAMESPACE}</macro><value>{$AWS.RDS.LLD.FILTER.ALARM_SERVICE_NAMESPACE.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>D</formulaid></condition><condition><macro>{#ALARM_NAME}</macro><value>{$AWS.RDS.LLD.FILTER.ALARM_NAME.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#ALARM_NAME}</macro><value>{$AWS.RDS.LLD.FILTER.ALARM_NAME.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition></conditions></filter><description>Discovery instance alarms.</description><item_prototypes><item_prototype><uuid>aab5aaf6e27740c6ac92f5494b3aef4b</uuid><name>AWS RDS Alarms: [&quot;{#ALARM_NAME}&quot;]: State</name><type>DEPENDENT</type><key>aws.rds.alarm.state[&quot;{#ALARM_NAME}&quot;]</key><delay>0</delay><history>7d</history><description>The state value for the alarm. Possible values: 0 (OK), 1 (INSUFFICIENT_DATA), 2 (ALARM).
+Alarm description:
+{#ALARM_DESCRIPTION}</description><valuemap><name>Alarm state</name></valuemap><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.AlarmName == &quot;{#ALARM_NAME}&quot;)].StateValue.first()</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler><error_handler_params>3</error_handler_params></step><step><type>JAVASCRIPT</type><parameters><parameter>var state = ['OK', 'INSUFFICIENT_DATA', 'ALARM'];
+
+return state.indexOf(value.trim()) === -1 ? 255 : state.indexOf(value.trim());</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_alarms</key></master_item><tags><tag><tag>component</tag><value>alarms</value></tag></tags><trigger_prototypes><trigger_prototype><uuid>7d87b8d84fef4aff8aa9c0fd49e49619</uuid><expression>last(/AWS RDS instance by HTTP/aws.rds.alarm.state[&quot;{#ALARM_NAME}&quot;])=1</expression><name>AWS RDS Alarms: &quot;{#ALARM_NAME}&quot; has 'Insufficient data' state</name><priority>INFO</priority><tags><tag><tag>scope</tag><value>notice</value></tag></tags></trigger_prototype></trigger_prototypes></item_prototype><item_prototype><uuid>6e95f834b2284447b5ab0f6516d29946</uuid><name>AWS RDS Alarms: [&quot;{#ALARM_NAME}&quot;]: State reason</name><type>DEPENDENT</type><key>aws.rds.alarm.state_reason[&quot;{#ALARM_NAME}&quot;]</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>TEXT</value_type><description>An explanation for the alarm state, in text format.
+Alarm description:
+{#ALARM_DESCRIPTION}</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.AlarmName == &quot;{#ALARM_NAME}&quot;)].StateReason.first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_alarms</key></master_item><tags><tag><tag>component</tag><value>alarms</value></tag></tags></item_prototype></item_prototypes><trigger_prototypes><trigger_prototype><uuid>0f70f3d91d9c403c9d4c3cfb3283865f</uuid><expression>last(/AWS RDS instance by HTTP/aws.rds.alarm.state[&quot;{#ALARM_NAME}&quot;])=2 and length(last(/AWS RDS instance by HTTP/aws.rds.alarm.state_reason[&quot;{#ALARM_NAME}&quot;]))&gt;0</expression><name>AWS RDS Alarms: &quot;{#ALARM_NAME}&quot; has 'Alarm' state</name><priority>AVERAGE</priority><description>Alarm &quot;{#ALARM_NAME}&quot; has 'Alarm' state. 
+Reason: {ITEM.LASTVALUE2}</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger_prototype></trigger_prototypes><master_item><key>aws.rds.get_alarms</key></master_item><preprocessing><step><type>JAVASCRIPT</type><parameters><parameter>var result = [];
+var alarms = JSON.parse(value);
+
+alarms.forEach(function(alarm) {
+
+ result.push({
+'{#ALARM_DESCRIPTION}': alarm.AlarmDescription !== null ? alarm.AlarmDescription : 'None' ,
+'{#ALARM_NAME}': alarm.AlarmName,
+'{#ALARM_PERIOD}': alarm.Period,
+'{#METRIC_NAME}': alarm.MetricName,
+'{#ALARM_SERVICE_NAMESPACE}': alarm.Namespace !== null ? alarm.Namespace : 'None'
+  });
+});
+
+return JSON.stringify(result);</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing></discovery_rule><discovery_rule><uuid>f13154dfb6b547718d1bf4b0ed12d35f</uuid><name>Aurora metrics discovery</name><type>DEPENDENT</type><key>aws.rds.aurora.discovery</key><delay>0</delay><description>Discovery Amazon Aurora metrics.
+https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.AuroraMySQL.Monitoring.Metrics.html#Aurora.AuroraMySQL.Monitoring.Metrics.instances</description><item_prototypes><item_prototype><uuid>28df1a214515425099514140a1244cc4</uuid><name>AWS RDS: Replication: Lag, max</name><type>DEPENDENT</type><key>aws.rds.aurora_replica_lag.max[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The maximum amount of lag between the primary instance and each Aurora DB instance in the DB cluster.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;AuroraReplicaLagMaximum&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>39e226420be740bd81712624d4d86882</uuid><name>AWS RDS: Replication: Lag, min</name><type>DEPENDENT</type><key>aws.rds.aurora_replica_lag.min[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The minimum amount of lag between the primary instance and each Aurora DB instance in the DB cluster.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;AuroraReplicaLagMinimum&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>966022d4bc484918b9497d3515c35f9d</uuid><name>AWS RDS: Replication: Lag</name><type>DEPENDENT</type><key>aws.rds.aurora_replica_lag[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>For an Aurora replica, the amount of lag when replicating updates from the primary instance.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;AuroraReplicaLag&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>4a76341c354540b48677c29a92270d57</uuid><name>AWS RDS: Buffer Cache hit ratio</name><type>DEPENDENT</type><key>aws.rds.buffer_cache_hit_ratio[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The percentage of requests that are served by the buffer cache.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;BufferCacheHitRatio&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>cache</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>a988ecbcb5804916a37e2c4270cf1261</uuid><name>AWS RDS: Operations: Commit latency</name><type>DEPENDENT</type><key>aws.rds.commit_latency[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The amount of latency for commit operations.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;CommitLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>0892af875af04dbebd3954b37a196605</uuid><name>AWS RDS: Operations: Commit throughput</name><type>DEPENDENT</type><key>aws.rds.commit_throughput.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The average number of commit operations per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;CommitThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>febdffdd64974deb91185af1bbc78ffd</uuid><name>AWS RDS: Deadlocks, rate</name><type>DEPENDENT</type><key>aws.rds.deadlocks.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The average number of deadlocks in the database per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;Deadlocks&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>24d139d74b034e2096f50943fa003e4f</uuid><name>AWS RDS: Engine uptime</name><type>DEPENDENT</type><key>aws.rds.engine_uptime[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The amount of time that the instance has been running.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;EngineUptime&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>instance</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype><item_prototype><uuid>65ee7a93945d4c7baf6c20137e62b9dc</uuid><name>AWS RDS: Rollback segment history list length</name><type>DEPENDENT</type><key>aws.rds.rollback_segment_history_list_length[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The undo logs that record committed transactions with delete-marked records. These records are scheduled to be processed by the InnoDB purge operation.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;RollbackSegmentHistoryListLength&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>application</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>2c1b3f9701f343e5845c78c52e71f72f</uuid><name>AWS RDS: Row lock time</name><type>DEPENDENT</type><key>aws.rds.row_locktime[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The total time spent acquiring row locks for InnoDB tables.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;RowLockTime&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>application</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>05218f79a137466392af0652acfe2db5</uuid><name>AWS RDS: Operations: Select latency</name><type>DEPENDENT</type><key>aws.rds.select_latency[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The amount of latency for select queries.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;SelectLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>849c0bd9b5d940568bc1e71eb6318738</uuid><name>AWS RDS: Operations: Select throughput</name><type>DEPENDENT</type><key>aws.rds.select_throughput.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>rps</units><description>The average number of select queries per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;SelectThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>62e6fa21b2f54030bbbd04f268de5737</uuid><name>AWS RDS: Network: Throughput</name><type>DEPENDENT</type><key>aws.rds.storage_network_throughput[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Bps</units><description>The amount of network throughput received from and sent to the Aurora storage subsystem by each instance in the Aurora MySQL DB cluster.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;StorageNetworkThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>network</value></tag><tag><tag>engine</tag><value>aurora</value></tag></tags></item_prototype></item_prototypes><graph_prototypes><graph_prototype><uuid>3a753d02e4b8465a9f4da698c2acd387</uuid><name>AWS RDS: [{#SINGLETON}]Operations Latency (commit/select)</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.commit_latency[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.select_latency[{#SINGLETON}]</key></item></graph_item></graph_items></graph_prototype><graph_prototype><uuid>c856d61be8594efda8f87396c6ba31f9</uuid><name>AWS RDS: [{#SINGLETON}]Operations Throughput (commit/select)</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.commit_throughput.rate[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.select_throughput.rate[{#SINGLETON}]</key></item></graph_item></graph_items></graph_prototype></graph_prototypes><master_item><key>aws.rds.engine</key></master_item><preprocessing><step><type>JAVASCRIPT</type><parameters><parameter>return JSON.stringify(value.includes('aurora') ? [{'{#SINGLETON}': ''}] : []);</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>6h</parameter></parameters></step></preprocessing></discovery_rule><discovery_rule><uuid>cb9080a3bf4c4c51936bb8d818f69adc</uuid><name>Instance Events discovery</name><type>DEPENDENT</type><key>aws.rds.events.discovery</key><delay>0</delay><filter><evaltype>AND</evaltype><conditions><condition><macro>{#EVENT_CATEGORY}</macro><value>{$AWS.RDS.LLD.FILTER.EVENT_CATEGORY.MATCHES}</value><formulaid>A</formulaid></condition><condition><macro>{#EVENT_CATEGORY}</macro><value>{$AWS.RDS.LLD.FILTER.EVENT_CATEGORY.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>B</formulaid></condition><condition><macro>{#EVENT_SOURCE_TYPE}</macro><value>{$AWS.RDS.LLD.FILTER.EVENT_SOURCE_TYPE.MATCHES}</value><formulaid>C</formulaid></condition><condition><macro>{#EVENT_SOURCE_TYPE}</macro><value>{$AWS.RDS.LLD.FILTER.EVENT_SOURCE_TYPE.NOT_MATCHES}</value><operator>NOT_MATCHES_REGEX</operator><formulaid>D</formulaid></condition></conditions></filter><description>Discovery instance events.</description><item_prototypes><item_prototype><uuid>21b9df85f2e841c48204c7cb4fb5caeb</uuid><name>AWS RDS Events: [{#EVENT_CATEGORY}]: {#EVENT_SOURCE_TYPE}/{#EVENT_SOURCE_ID} : Date</name><type>DEPENDENT</type><key>aws.rds.event_date[&quot;{#EVENT_CATEGORY}/{#EVENT_SOURCE_TYPE}/{#EVENT_SOURCE_ID}&quot;]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>unixtime</units><description>Provides the text of this event.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.SourceIdentifier == &quot;{#EVENT_SOURCE_ID}&quot; &amp;&amp; @.SourceType == &quot;{#EVENT_SOURCE_TYPE}&quot; &amp;&amp; @.EventCategories == &quot;{#EVENT_CATEGORY}&quot;)].Date</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step><step><type>JSONPATH</type><parameters><parameter>$[-1]</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_events</key></master_item><tags><tag><tag>component</tag><value>events</value></tag><tag><tag>event-categories</tag><value>{#EVENT_CATEGORY}</value></tag></tags></item_prototype><item_prototype><uuid>10cf420329fa42c08266a5d38bc7678b</uuid><name>AWS RDS Events: [{#EVENT_CATEGORY}]: {#EVENT_SOURCE_TYPE}/{#EVENT_SOURCE_ID}: Message</name><type>DEPENDENT</type><key>aws.rds.event_message[&quot;{#EVENT_CATEGORY}/{#EVENT_SOURCE_TYPE}/{#EVENT_SOURCE_ID}&quot;]</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>TEXT</value_type><description>Provides the text of this event.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.SourceIdentifier == &quot;{#EVENT_SOURCE_ID}&quot; &amp;&amp; @.SourceType == &quot;{#EVENT_SOURCE_TYPE}&quot; &amp;&amp; @.EventCategories == &quot;{#EVENT_CATEGORY}&quot;)].Message</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step><step><type>JSONPATH</type><parameters><parameter>$[-1]</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing><master_item><key>aws.rds.get_events</key></master_item><tags><tag><tag>component</tag><value>events</value></tag><tag><tag>event-categories</tag><value>{#EVENT_CATEGORY}</value></tag></tags></item_prototype></item_prototypes><master_item><key>aws.rds.get_events</key></master_item><preprocessing><step><type>JAVASCRIPT</type><parameters><parameter>var lookup = {},
+    result = [];
+
+JSON.parse(value).forEach(function (event) {
+    var filter = event.EventCategories+event.SourceIdentifier+event.SourceType;
+    if (!(lookup[filter])) {
+        lookup[filter] = 1;
+   result.push({
+  '{#EVENT_CATEGORY}': event.EventCategories,
+  '{#EVENT_SOURCE_ID}': event.SourceIdentifier,
+  '{#EVENT_SOURCE_TYPE}': event.SourceType
+    });
+    }
+})
+
+return JSON.stringify(result);</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>3h</parameter></parameters></step></preprocessing></discovery_rule><discovery_rule><uuid>ec07301eaaad4f32a3759692d96150ab</uuid><name>Aurora MySQL metrics discovery</name><type>DEPENDENT</type><key>aws.rds.postgresql.discovery</key><delay>0</delay><description>Discovery Aurora MySQL metrics.
+Storage types:
+ aurora (for MySQL 5.6-compatible Aurora)
+ aurora-mysql (for MySQL 5.7-compatible and MySQL 8.0-compatible Aurora)</description><item_prototypes><item_prototype><uuid>3842a935bedf446d8b8b9a7fd58fc24b</uuid><name>AWS RDS: Connections: Aborted</name><type>DEPENDENT</type><key>aws.rds.aurora_clients_aborted[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of client connections that have not been closed properly.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;AbortedClients&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>connections</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>8b87e0f4f1fc4290a7c72ec382b74941</uuid><name>AWS RDS: Replication: Binlog lag</name><type>DEPENDENT</type><key>aws.rds.aurora_replication_binlog_lag[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The amount of time that a binary log replica DB cluster running on Aurora MySQL-Compatible Edition lags behind the binary log replication source. 
+A lag means that the source is generating records faster than the replica can apply them.
+The metric value indicates the following:
+
+A high value: The replica is lagging the replication source.
+0 or a value close to 0: The replica process is active and current.
+-1: Aurora can't determine the lag, which can happen during replica setup or when the replica is in an error state</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;AuroraBinlogReplicaLag&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>97f85bd65fc64b66b57b122f8689bc38</uuid><name>AWS RDS: Transactions: Active, rate</name><type>DEPENDENT</type><key>aws.rds.aurora_transactions_active.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of current transactions executing on an Aurora database instance per second.
+By default, Aurora doesn't enable this metric. To begin measuring this value, set innodb_monitor_enable='all' in the DB parameter group for a specific DB instance.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ActiveTransactions&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>transactions</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>44ca3ca16bd1450790099a0354e78f13</uuid><name>AWS RDS: Backtrack: Window, actual</name><type>DEPENDENT</type><key>aws.rds.backtrack_window_actual[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>!minutes</units><description>The difference between the target backtrack window and the actual backtrack window.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;BacktrackWindowActual&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>backtrack</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>20de520b7f53459db765eb221fcef248</uuid><name>AWS RDS: Backtrack: Window, alert</name><type>DEPENDENT</type><key>aws.rds.backtrack_window_alert[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of times that the actual backtrack window is smaller than the target backtrack window for a given period of time.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;BacktrackWindowAlert&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>backtrack</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>570e88d397524dfeb10d6c46cc859404</uuid><name>AWS RDS: Transactions: Blocked, rate</name><type>DEPENDENT</type><key>aws.rds.blocked_transactions.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of transactions in the database that are blocked per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;BlockedTransactions&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>transactions</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>3033650e795943bfab73e9d7347f3d24</uuid><name>AWS RDS: DDL: Latency</name><type>DEPENDENT</type><key>aws.rds.ddl_latency[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The amount of latency for data definition language (DDL) requests - for example, create, alter, and drop requests.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DDLLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>1ee5fdb6ed004e708ebe5ec8b2d039ba</uuid><name>AWS RDS: DDL: Throughput</name><type>DEPENDENT</type><key>aws.rds.ddl_throughput.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of DDL requests per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DDLThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>ab6a2d6f9c04497c86464f10aafa178c</uuid><name>AWS RDS: Operations: Delete latency</name><type>DEPENDENT</type><key>aws.rds.delete_latency[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The amount of latency for delete queries.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DeleteLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>9a28a1a0e1194d4fb55a5c2e926a7142</uuid><name>AWS RDS: Operations: Delete throughput</name><type>DEPENDENT</type><key>aws.rds.delete_throughput.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of delete queries per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DeleteThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>0ff7f102065a450cb77030c5f2e9cc76</uuid><name>AWS RDS: DML: Latency</name><type>DEPENDENT</type><key>aws.rds.dml_latency[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The amount of latency for inserts, updates, and deletes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DMLLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>97ce5f3d119c4381a99ead5effe6af44</uuid><name>AWS RDS: DML: Throughput</name><type>DEPENDENT</type><key>aws.rds.dml_throughput.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>rate</units><description>The average number of inserts, updates, and deletes per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;DMLThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>requests</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>182efdd016e9473eb4791e5343043b57</uuid><name>AWS RDS: Operations: Insert latency</name><type>DEPENDENT</type><key>aws.rds.insert_latency[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The amount of latency for insert queries, in milliseconds.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;InsertLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>db20ce55abbf4f248b8ac40a6f5576ec</uuid><name>AWS RDS: Operations: Insert throughput</name><type>DEPENDENT</type><key>aws.rds.insert_throughput.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of insert queries per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;InsertThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>c68d9d4496a84bf883330b1a82b62171</uuid><name>AWS RDS: Login failures, rate</name><type>DEPENDENT</type><key>aws.rds.login_failures.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The average number of failed login attempts per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;LoginFailures&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>application</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>c932d4f773c04499b045ddb4b767decb</uuid><name>AWS RDS: Binary log files, number</name><type>DEPENDENT</type><key>aws.rds.num_binary_log_files[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The number of binlog files generated.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;NumBinaryLogFiles&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag><tag><tag>engine</tag><value>aurora</value></tag><tag><tag>engine</tag><value>mysql</value></tag></tags></item_prototype><item_prototype><uuid>c7a191af58644441bfe9aa8579dd9190</uuid><name>AWS RDS: Queries, rate</name><type>DEPENDENT</type><key>aws.rds.queries.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The average number of queries executed per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;Queries&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>queries</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>886f68d6a1eb4953aef3fc4cf1296c62</uuid><name>AWS RDS: Resultset cache hit ratio</name><type>DEPENDENT</type><key>aws.rds.result_set_cache_hit_ratio[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The percentage of requests that are served by the Resultset cache.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;ResultSetCacheHitRatio&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>cache</value></tag><tag><tag>engine</tag><value>aurora-mysql</value></tag></tags></item_prototype><item_prototype><uuid>3b66ac67006b4229b1d523dfe19fcb1f</uuid><name>AWS RDS: Binary log files, size</name><type>DEPENDENT</type><key>aws.rds.sum_binary_log_files[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The total size of the binlog files.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;SumBinaryLogSize&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag><tag><tag>engine</tag><value>aurora</value></tag><tag><tag>engine</tag><value>mysql</value></tag></tags></item_prototype><item_prototype><uuid>44dcd553afe641d1b147426e614a7b41</uuid><name>AWS RDS: Operations: Update latency</name><type>DEPENDENT</type><key>aws.rds.update_latency[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>ms</units><description>The amount of latency for update queries.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;UpdateLatency&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora</value></tag><tag><tag>engine</tag><value>mysql</value></tag></tags></item_prototype><item_prototype><uuid>3a3548d63e1a4aab8853e13645f5898f</uuid><name>AWS RDS: Operations: Update throughput</name><type>DEPENDENT</type><key>aws.rds.update_throughput.rate[{#SINGLETON}]</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>Rps</units><description>The average number of update queries per second.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.[?(@.Label == &quot;UpdateThroughput&quot;)].Values.first().first()</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>aws.rds.get_metrics</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag><tag><tag>engine</tag><value>aurora</value></tag><tag><tag>engine</tag><value>mysql</value></tag></tags></item_prototype></item_prototypes><graph_prototypes><graph_prototype><uuid>981fd77559f247908b58ffcf883ade78</uuid><name>AWS RDS: [{#SINGLETON}]DML/DDL Latency</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.ddl_latency[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.dml_latency[{#SINGLETON}]</key></item></graph_item></graph_items></graph_prototype><graph_prototype><uuid>7277bbc0b7c0427697348c8a182b954f</uuid><name>AWS RDS: [{#SINGLETON}]DML/DDL Throughput</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.ddl_throughput.rate[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.dml_throughput.rate[{#SINGLETON}]</key></item></graph_item></graph_items></graph_prototype><graph_prototype><uuid>13a9823d2a2444b7867859aacca47022</uuid><name>AWS RDS: [{#SINGLETON}]Operations Latency (insert/delete/update)</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.insert_latency[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.delete_latency[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.update_latency[{#SINGLETON}]</key></item></graph_item></graph_items></graph_prototype><graph_prototype><uuid>72117fc5b5434711ab15f07f117b22bd</uuid><name>AWS RDS: [{#SINGLETON}]Operations Throughput(insert/delete/update)</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.insert_throughput.rate[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.delete_throughput.rate[{#SINGLETON}]</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.update_throughput.rate[{#SINGLETON}]</key></item></graph_item></graph_items></graph_prototype></graph_prototypes><master_item><key>aws.rds.engine</key></master_item><preprocessing><step><type>JAVASCRIPT</type><parameters><parameter>return JSON.stringify((value === 'aurora-mysql' || value === 'aurora')  ? [{'{#SINGLETON}': ''}] : []);</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>6h</parameter></parameters></step></preprocessing></discovery_rule></discovery_rules><tags><tag><tag>class</tag><value>software</value></tag><tag><tag>target</tag><value>aws</value></tag><tag><tag>target</tag><value>rds</value></tag></tags><macros><macro><macro>{$AWS.ACCESS.KEY.ID}</macro><description>Access key ID.</description></macro><macro><macro>{$AWS.EBS.BYTE.CREDIT.BALANCE.MIN.WARN}</macro><value>20</value><description>Minimum percentage of Byte credits remaining for trigger expression.</description></macro><macro><macro>{$AWS.EBS.IO.CREDIT.BALANCE.MIN.WARN}</macro><value>20</value><description>Minimum percentage of I/O credits remaining for trigger expression.</description></macro><macro><macro>{$AWS.PROXY}</macro><description>Sets HTTP proxy value. If this macro is empty then no proxy is used.</description></macro><macro><macro>{$AWS.RDS.BURST.CREDIT.BALANCE.MIN.WARN}</macro><value>20</value><description>Minimum percentage of Byte credits remaining for trigger expression.</description></macro><macro><macro>{$AWS.RDS.CPU.CREDIT.BALANCE.MIN.WARN}</macro><value>50</value><description>Minimum number of free earned CPU credits for trigger expression.</description></macro><macro><macro>{$AWS.RDS.CPU.UTIL.WARN.MAX}</macro><value>85</value><description>The warning threshold of the CPU utilization in %.</description></macro><macro><macro>{$AWS.RDS.INSTANCE.ID}</macro><description>RDS DB Instance identifier.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.ALARM_NAME.MATCHES}</macro><value>.*</value><description>Filter of discoverable alarms by namespace.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.ALARM_NAME.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>Filter to exclude discovered alarms by namespace.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.ALARM_SERVICE_NAMESPACE.MATCHES}</macro><value>.*</value><description>Filter of discoverable alarms by namespace.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.ALARM_SERVICE_NAMESPACE.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>Filter to exclude discovered alarms by namespace.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.EVENT_CATEGORY.MATCHES}</macro><value>.*</value><description>Filter of discoverable events by category.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.EVENT_CATEGORY.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>Filter to exclude discovered events by category.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.EVENT_SOURCE_TYPE.MATCHES}</macro><value>.*</value><description>Filter of discoverable events by source type.</description></macro><macro><macro>{$AWS.RDS.LLD.FILTER.EVENT_SOURCE_TYPE.NOT_MATCHES}</macro><value>CHANGE_IF_NEEDED</value><description>Filter to exclude discovered events by source type.</description></macro><macro><macro>{$AWS.REGION}</macro><value>us-west-1</value><description>Amazon RDS Region code.</description></macro><macro><macro>{$AWS.SECRET.ACCESS.KEY}</macro><type>SECRET_TEXT</type><description>Secret access key.</description></macro></macros><valuemaps><valuemap><uuid>4ff4cda021a4464ebbebb42b7ee02673</uuid><name>Alarm state</name><mappings><mapping><value>0</value><newvalue>OK</newvalue></mapping><mapping><value>1</value><newvalue>Insufficient data</newvalue></mapping><mapping><value>2</value><newvalue>Alarm</newvalue></mapping><mapping><value>255</value><newvalue>Unknown</newvalue></mapping></mappings></valuemap><valuemap><uuid>69bbb2cfded14be6ac596408bdd4de37</uuid><name>Read replica state</name><mappings><mapping><value>0</value><newvalue>Error</newvalue></mapping><mapping><value>1</value><newvalue>Normal</newvalue></mapping></mappings></valuemap></valuemaps></template></templates><graphs><graph><uuid>f2178fe21bc4454a9d3eee3b17ef11bc</uuid><name>AWS RDS: Disk read/write IOPS</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.read_iops.rate</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.write_iops.rate</key></item></graph_item></graph_items></graph><graph><uuid>e0fbc3a0256c41cf99acb307921f448f</uuid><name>AWS RDS: Disk read/write latency</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.read_latency</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.write_latency</key></item></graph_item></graph_items></graph><graph><uuid>a479a587e0c5484293e939ff56060270</uuid><name>AWS RDS: Disk read/write throughput</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.read_throughput.rate</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.write_throughput.rate</key></item></graph_item></graph_items></graph><graph><uuid>4f76da00f7ea417d9156a8ab21b2d61f</uuid><name>AWS RDS: Local storage read/write IOPS</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.write_iops_local_storage.rate</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.read_iops_local_storage.rate</key></item></graph_item></graph_items></graph><graph><uuid>a38ee12797874a57bd30307d1ba7b589</uuid><name>AWS RDS: Local storage read/write latency</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.read_latency_local_storage</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.write_latency_local_storage</key></item></graph_item></graph_items></graph><graph><uuid>f2a25a07efea46d1836188bf9cdb12d2</uuid><name>AWS RDS: Local storage read/write throughput</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.read_throughput_local_storage.rate</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.write_throughput_local_storage.rate</key></item></graph_item></graph_items></graph><graph><uuid>05c0cf7b37664e06a0fd74f62761fe5e</uuid><name>AWS RDS: Network traffic</name><graph_items><graph_item><color>1A7C11</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.network_receive_throughput.rate</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.network_transmit_throughput.rate</key></item></graph_item><graph_item><sortorder>2</sortorder><color>F63100</color><item><host>AWS RDS instance by HTTP</host><key>aws.rds.network_throughput.rate</key></item></graph_item></graph_items></graph></graphs></zabbix_export>

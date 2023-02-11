@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export><version>6.0</version><date>2023-02-11T16:15:11Z</date><groups><group><uuid>a571c0d144b14fd4a87a9d9b2aa9fcd6</uuid><name>Templates/Applications</name></group></groups><templates><template><uuid>d023e2cd326c486f908e3e361d1fe157</uuid><template>Azure PostgreSQL single server by HTTP</template><name>Azure PostgreSQL single server by HTTP</name><description>This template is designed to monitor Microsoft Azure PostgreSQL servers by HTTP.
+It works without any external scripts and uses the script item.
+
+Setup:
+  1. Create an Azure service principal via the Azure command-line interface (Azure CLI) for your subscription.
+    `az ad sp create-for-rbac --name zabbix --role reader --scope /subscriptions/&lt;subscription_id&gt;`
+    See https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli for more details.
+  2. Link the template to a host.
+  3. Configure macros `{$AZURE.APP_ID}`, `{$AZURE.PASSWORD}`, `{$AZURE.TENANT_ID}`, `{$AZURE.SUBSCRIPTION_ID}`, and `{$AZURE.RESOURCE_ID}`.
+
+You can discuss this template or leave feedback on our forum https://www.zabbix.com/forum/zabbix-suggestions-and-feedback/
+
+Template tooling version used: 0.41</description><groups><group><name>Templates/Applications</name></group></groups><items><item><uuid>9eb43a5ffb0d4e07be8d1fccfdecd2aa</uuid><name>Azure PostgreSQL: Availability status detailed</name><type>DEPENDENT</type><key>azure.db.pgsql.availability.details</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>CHAR</value_type><description>The summary description of the availability status.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.health.summary</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>health</value></tag></tags></item><item><uuid>df4c66646f864f79b5f5e9f71dbefe82</uuid><name>Azure PostgreSQL: Availability state</name><type>DEPENDENT</type><key>azure.db.pgsql.availability.state</key><delay>0</delay><history>7d</history><description>The availability status of the resource.</description><valuemap><name>Azure resource health state</name></valuemap><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.health.availabilityState</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler><error_handler_params>3</error_handler_params></step><step><type>STR_REPLACE</type><parameters><parameter>Available</parameter><parameter>0</parameter></parameters></step><step><type>STR_REPLACE</type><parameters><parameter>Degraded</parameter><parameter>1</parameter></parameters></step><step><type>STR_REPLACE</type><parameters><parameter>Unavailable</parameter><parameter>2</parameter></parameters></step><step><type>STR_REPLACE</type><parameters><parameter>Unknown</parameter><parameter>3</parameter></parameters></step><step><type>IN_RANGE</type><parameters><parameter>0</parameter><parameter>3</parameter></parameters><error_handler>CUSTOM_VALUE</error_handler><error_handler_params>3</error_handler_params></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>health</value></tag></tags><triggers><trigger><uuid>699ca12c916746b1bf1e121261771cc3</uuid><expression>last(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.availability.state)=1</expression><name>Azure PostgreSQL: PostgreSQL server is degraded</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>AVERAGE</priority><description>The resource is in degraded state.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger><trigger><uuid>14e45ba0bc26409a89d92edfda152947</uuid><expression>last(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.availability.state)=3</expression><name>Azure PostgreSQL: PostgreSQL server is in unknown state</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><description>The resource state is unknown.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger><trigger><uuid>4dc9113f8a914ac098d8736dba5aed4a</uuid><expression>last(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.availability.state)=2</expression><name>Azure PostgreSQL: PostgreSQL server is unavailable</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>HIGH</priority><description>The resource state is unavailable.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>3d0d3e1fe77740e4bd7b720368707214</uuid><name>Azure PostgreSQL: Connections active</name><type>DEPENDENT</type><key>azure.db.pgsql.connections.active</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The count of active connections.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.active_connections.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>353a6ba543a84b32b16a5809ae63b4e1</uuid><name>Azure PostgreSQL: Connections failed</name><type>DEPENDENT</type><key>azure.db.pgsql.connections.failed</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><description>The count of failed connections.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.connections_failed.total</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>537330b2372b434ebcea8a77a809c2f3</uuid><name>Azure PostgreSQL: Percentage CPU</name><type>DEPENDENT</type><key>azure.db.pgsql.cpu.percentage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The CPU percent of a host.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.cpu_percent.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>cpu</value></tag></tags><triggers><trigger><uuid>33bd2ef88ad3468b9f0b2b1358cc7448</uuid><expression>min(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.cpu.percentage,5m)&gt;{$AZURE.DB.CPU.UTIL.CRIT}</expression><name>Azure PostgreSQL: High CPU utilization</name><opdata>Current utilization: {ITEM.LASTVALUE1}</opdata><priority>HIGH</priority><description>The CPU utilization is too high. The system might be slow to respond.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>5b132ff050c94daa92b252529a52c535</uuid><name>Azure PostgreSQL: Get errors</name><type>DEPENDENT</type><key>azure.db.pgsql.data.errors</key><delay>0</delay><history>7d</history><trends>0</trends><value_type>TEXT</value_type><description>A list of errors from API requests.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.errors</parameter></parameters></step><step><type>DISCARD_UNCHANGED_HEARTBEAT</type><parameters><parameter>1h</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>raw</value></tag></tags><triggers><trigger><uuid>dd3d0be997204f8b9968ef5839fb7a9b</uuid><expression>length(last(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.data.errors))&gt;0</expression><name>Azure PostgreSQL: There are errors in requests to API</name><opdata>{ITEM.LASTVALUE1}</opdata><priority>AVERAGE</priority><description>Zabbix has received errors in response to API requests.</description><tags><tag><tag>scope</tag><value>availability</value></tag></tags></trigger></triggers></item><item><uuid>e47d863822e64e6292bfa3e684bc2839</uuid><name>Azure PostgreSQL: Get data</name><type>SCRIPT</type><key>azure.db.pgsql.data.get</key><history>0d</history><trends>0</trends><value_type>TEXT</value_type><params>var AzureDB = {
+    params: {},
+    token: null,
+
+    setParams: function (params) {
+        ['app_id', 'password', 'tenant_id', 'subscription_id', 'resource_id'].forEach(function (field) {
+            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                throw 'Required param is not set: ' + field + '.';
+            }
+        });
+
+        AzureDB.params = params;
+    },
+
+
+    request: function (url, data) {
+        if (typeof data === 'undefined' || data === null) {
+            data = '';
+        }
+
+        var response, request = new HttpRequest();
+            if (AzureDB.token) {
+                request.addHeader('Accept: application/json');
+                request.addHeader('Authorization: Bearer ' + AzureDB.token);
+            }
+    
+        Zabbix.log(4, '[ Azure ] Sending request: ' + url);
+
+        if (data !== '') {
+            request.addHeader('Content-Type: application/x-www-form-urlencoded');
+            response = request.post(url, data);
+        }
+        else {
+            response = request.get(url);
+        }
+
+        Zabbix.log(4, '[ Azure ] Received response with status code ' + request.getStatus() + ': ' + response);
+
+        if (request.getStatus() !== 200 || response === null) {
+            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;
+        }
+
+        try {
+            return JSON.parse(response);
+        }
+        catch (error) {
+            throw 'Failed to parse response received from API.';
+        }
+}
+
+};
+
+var metrics = [
+    'cpu_percent',
+    'memory_percent',
+    'io_consumption_percent',
+    'storage_percent',
+    'storage_used',
+    'storage_limit',
+    'serverlog_storage_percent',
+    'serverlog_storage_usage',
+    'serverlog_storage_limit',
+    'active_connections',
+    'connections_failed',
+    'backup_storage_used',
+    'network_bytes_egress',
+    'network_bytes_ingress',
+    'pg_replica_log_delay_in_seconds',
+    'pg_replica_log_delay_in_bytes'
+],
+    prepared_metrics = [],
+    data = {};
+    data['errors'] = {};
+    data['metrics'] = {};
+
+try {
+    AzureDB.setParams(JSON.parse(value));
+
+    try {
+        result = AzureDB.request(
+                'https://login.microsoftonline.com/' + encodeURIComponent(AzureDB.params.tenant_id) + '/oauth2/token',
+                'grant_type=client_credentials&amp;resource=' + encodeURIComponent('https://management.azure.com/') + '&amp;client_id=' + encodeURIComponent(AzureDB.params.app_id) + '&amp;client_secret=' + encodeURIComponent(AzureDB.params.password)
+        );
+
+        if ('access_token' in result) {
+            AzureDB.token = result['access_token'];
+        } else {
+            throw 'Auth response does not contain access token.';
+        }
+    }
+    catch (error) {
+        data.errors.auth = error.toString();
+    }
+
+    if (!('auth' in data.errors)) {
+        try {
+            health = AzureDB.request('https://management.azure.com' + AzureDB.params.resource_id + '/providers/Microsoft.ResourceHealth/availabilityStatuses?api-version=2020-05-01');
+            if ('value' in health &amp;&amp; Array.isArray(health.value) &amp;&amp; health.value.length &gt; 0 &amp;&amp; 'properties' in health.value[0] &amp;&amp; typeof health.value[0].properties === 'object') {
+                data.health = health.value[0].properties;
+            }
+        }
+        catch (error) {
+            data.errors.health = error.toString();
+        }
+
+        for (var i = 0; i &lt; metrics.length; i += 20) {
+            var chunk = metrics.slice(i, i + 20);
+
+            prepared_metrics.push(
+                chunk.map(function(element) {
+                    return encodeURIComponent(element);
+                }).join(',')
+            );
+        }
+
+        start_date = new Date((new Date().getTime()) - 300000).toISOString().replace(/\.\d+/, '');
+        end_date = new Date().toISOString().replace(/\.\d+/, '');
+        
+        for (var j in prepared_metrics) {
+            try {
+                metrics_data = AzureDB.request('https://management.azure.com' + AzureDB.params.resource_id + '/providers/Microsoft.Insights/metrics?metricnames=' + prepared_metrics[j] + '&amp;timespan=' + encodeURIComponent(start_date) + '/' + encodeURIComponent(end_date) + '&amp;api-version=2021-05-01');
+                if ('value' in metrics_data &amp;&amp; Array.isArray(metrics_data.value) &amp;&amp; metrics_data.value.length &gt; 0) {
+                    for (k in metrics_data.value) {
+                        if ('name' in metrics_data.value[k] &amp;&amp; typeof metrics_data.value[k].name === 'object' &amp;&amp; 'value' in metrics_data.value[k].name &amp;&amp; typeof metrics_data.value[k].name.value === 'string' &amp;&amp; 'timeseries' in metrics_data.value[k] &amp;&amp; Array.isArray(metrics_data.value[k].timeseries) &amp;&amp; metrics_data.value[k].timeseries.length &gt; 0 &amp;&amp; 'data' in metrics_data.value[k].timeseries[0] &amp;&amp; Array.isArray(metrics_data.value[k].timeseries[0].data) &amp;&amp; metrics_data.value[k].timeseries[0].data.length &gt; 0) {
+                            data.metrics[metrics_data.value[k].name.value.replace(/(\s|\/)+/g, '')] = metrics_data.value[k].timeseries[0].data[metrics_data.value[k].timeseries[0].data.length - 1];
+                        }
+                    }
+                }
+            }
+            catch (error) {
+                data.errors[prepared_metrics[j]] = error.toString();
+            }
+        } 
+    }
+}
+catch (error) {
+    data.errors.params = error.toString();
+}
+
+if (Object.keys(data.errors).length !== 0) {
+    errors = 'Failed to receive data:';
+    for (var error in data.errors) {
+        errors += '\n' + error + ' : ' + data.errors[error];
+    }
+    data.errors = errors;
+}
+else {
+    data.errors = '';
+}
+
+return JSON.stringify(data);</params><description>The result of API requests is expressed in the JSON.</description><timeout>{$AZURE.DATA.TIMEOUT}</timeout><parameters><parameter><name>app_id</name><value>{$AZURE.APP_ID}</value></parameter><parameter><name>password</name><value>{$AZURE.PASSWORD}</value></parameter><parameter><name>tenant_id</name><value>{$AZURE.TENANT_ID}</value></parameter><parameter><name>subscription_id</name><value>{$AZURE.SUBSCRIPTION_ID}</value></parameter><parameter><name>resource_id</name><value>{$AZURE.RESOURCE_ID}</value></parameter></parameters><tags><tag><tag>component</tag><value>raw</value></tag></tags></item><item><uuid>9eade85c49bc462aab33b03e37581d87</uuid><name>Azure PostgreSQL: IO consumption percent</name><type>DEPENDENT</type><key>azure.db.pgsql.io.consumption.percent</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The IO Percent.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.io_consumption_percent.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>operations</value></tag></tags></item><item><uuid>e2ee4882b08f45788e6abb698265810e</uuid><name>Azure PostgreSQL: Memory utilization</name><type>DEPENDENT</type><key>azure.db.pgsql.memory.percentage</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The memory percent of a host.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.memory_percent.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>memory</value></tag></tags><triggers><trigger><uuid>3119f21167a546369c05d31cda2e0147</uuid><expression>min(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.memory.percentage,5m)&gt;{$AZURE.DB.MEMORY.UTIL.CRIT}</expression><name>Azure PostgreSQL: High memory utilization</name><opdata>Current utilization: {ITEM.LASTVALUE1}</opdata><priority>AVERAGE</priority><description>The system is running out of free memory.</description><tags><tag><tag>scope</tag><value>performance</value></tag></tags></trigger></triggers></item><item><uuid>f81eeb98d5e942f296c360ff71e8bf8d</uuid><name>Azure PostgreSQL: Network out</name><type>DEPENDENT</type><key>azure.db.pgsql.network.egress</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>bps</units><description>Network outbound traffic across the active connections.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.network_bytes_egress.total</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step><step><type>MULTIPLIER</type><parameters><parameter>0.1333</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>51f7e35042d04ddb88c7703d1b015d3b</uuid><name>Azure PostgreSQL: Network in</name><type>DEPENDENT</type><key>azure.db.pgsql.network.ingress</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>bps</units><description>Network inbound traffic across the active connections.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.network_bytes_ingress.total</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step><step><type>MULTIPLIER</type><parameters><parameter>0.1333</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>network</value></tag></tags></item><item><uuid>1db9e470b527476fae1d26d4b67f855b</uuid><name>Azure PostgreSQL: Replication lag</name><type>DEPENDENT</type><key>azure.db.pgsql.replica.log.delay</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>s</units><description>The replication lag expressed in seconds.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.pg_replica_log_delay_in_seconds.maximum</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag></tags></item><item><uuid>6cdfda8f9e6640f8a8536f88729d75d6</uuid><name>Azure PostgreSQL: Max lag across replicas in bytes</name><type>DEPENDENT</type><key>azure.db.pgsql.replica.log.delay.bytes</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>Lag expressed in bytes for the most lagging replica.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.pg_replica_log_delay_in_bytes.maximum</parameter></parameters><error_handler>DISCARD_VALUE</error_handler></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>replication</value></tag></tags></item><item><uuid>6b06fb0e008640839dc3cda5bcc3f91a</uuid><name>Azure PostgreSQL: Backup storage used</name><type>DEPENDENT</type><key>azure.db.pgsql.storage.backup.used</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>Used backup storage expressed in bytes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.backup_storage_used.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item><item><uuid>b8d5ac0b049a4d73b2f35f59c7e7609c</uuid><name>Azure PostgreSQL: Storage limit</name><type>DEPENDENT</type><key>azure.db.pgsql.storage.limit</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The storage limit expressed in bytes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.storage_limit.maximum</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item><item><uuid>750b4d3438614cc992694136d309c3cb</uuid><name>Azure PostgreSQL: Storage percent</name><type>DEPENDENT</type><key>azure.db.pgsql.storage.percent</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The storage utilization expressed in %.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.storage_percent.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags><triggers><trigger><uuid>6538d2c8ed774feb951204308f1458ce</uuid><expression>last(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.storage.percent)&gt;{$AZURE.DB.STORAGE.PUSED.CRIT}</expression><name>Azure PostgreSQL: Storage space is critically low</name><opdata>Current utilization: {ITEM.LASTVALUE1}</opdata><priority>AVERAGE</priority><description>Critical utilization of the storage space.</description><tags><tag><tag>scope</tag><value>capacity</value></tag></tags></trigger><trigger><uuid>7f7a004cfc2a492092dd74c475888e8b</uuid><expression>last(/Azure PostgreSQL single server by HTTP/azure.db.pgsql.storage.percent)&gt;{$AZURE.DB.STORAGE.PUSED.WARN}</expression><name>Azure PostgreSQL: Storage space is low</name><opdata>Current utilization: {ITEM.LASTVALUE1}</opdata><priority>WARNING</priority><description>High utilization of the storage space.</description><tags><tag><tag>scope</tag><value>capacity</value></tag></tags></trigger></triggers></item><item><uuid>399ef67426494a5cb7a820d056dfd4d5</uuid><name>Azure PostgreSQL: Server log storage limit</name><type>DEPENDENT</type><key>azure.db.pgsql.storage.server.log.limit</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The storage limit of a server log expressed in bytes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.serverlog_storage_limit.maximum</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item><item><uuid>ef6890330ebe4fe09f46b0d2f6d3f827</uuid><name>Azure PostgreSQL: Server log storage percent</name><type>DEPENDENT</type><key>azure.db.pgsql.storage.server.log.percent</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>%</units><description>The storage utilization by a server log expressed in %.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.serverlog_storage_percent.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item><item><uuid>36bd10a959964083ae47349dd83ec695</uuid><name>Azure PostgreSQL: Server log storage used</name><type>DEPENDENT</type><key>azure.db.pgsql.storage.server.log.used</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>The storage space used by a server log expressed in bytes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.serverlog_storage_usage.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item><item><uuid>dcbb87d442a04938b23e68f739f1e36f</uuid><name>Azure PostgreSQL: Storage used</name><type>DEPENDENT</type><key>azure.db.pgsql.storage.used</key><delay>0</delay><history>7d</history><value_type>FLOAT</value_type><units>B</units><description>Used storage space expressed in bytes.</description><preprocessing><step><type>JSONPATH</type><parameters><parameter>$.metrics.storage_used.average</parameter></parameters></step></preprocessing><master_item><key>azure.db.pgsql.data.get</key></master_item><tags><tag><tag>component</tag><value>storage</value></tag></tags></item></items><tags><tag><tag>class</tag><value>software</value></tag><tag><tag>target</tag><value>azure</value></tag><tag><tag>target</tag><value>postgresql</value></tag></tags><macros><macro><macro>{$AZURE.APP_ID}</macro><description>The AppID of Microsoft Azure.</description></macro><macro><macro>{$AZURE.DATA.TIMEOUT}</macro><value>60s</value><description>A response timeout for an API.</description></macro><macro><macro>{$AZURE.DB.CPU.UTIL.CRIT}</macro><value>90</value><description>The critical threshold of the CPU utilization expressed in %.</description></macro><macro><macro>{$AZURE.DB.MEMORY.UTIL.CRIT}</macro><value>90</value><description>The critical threshold of the memory utilization expressed in %.</description></macro><macro><macro>{$AZURE.DB.STORAGE.PUSED.CRIT}</macro><value>90</value><description>The critical threshold of the storage utilization expressed in %.</description></macro><macro><macro>{$AZURE.DB.STORAGE.PUSED.WARN}</macro><value>80</value><description>The warning threshold of the storage utilization expressed in %.</description></macro><macro><macro>{$AZURE.PASSWORD}</macro><type>SECRET_TEXT</type><description>Microsoft Azure password.</description></macro><macro><macro>{$AZURE.RESOURCE_ID}</macro><description>Microsoft Azure PostgreSQL server ID.</description></macro><macro><macro>{$AZURE.SUBSCRIPTION_ID}</macro><description>Microsoft Azure subscription ID.</description></macro><macro><macro>{$AZURE.TENANT_ID}</macro><description>Microsoft Azure tenant ID.</description></macro></macros><valuemaps><valuemap><uuid>61fc206aaae04abda4012e031f0e27ac</uuid><name>Azure resource health state</name><mappings><mapping><value>0</value><newvalue>Available</newvalue></mapping><mapping><value>1</value><newvalue>Degraded</newvalue></mapping><mapping><value>2</value><newvalue>Unavailable</newvalue></mapping><mapping><value>3</value><newvalue>Unknown</newvalue></mapping></mappings></valuemap></valuemaps></template></templates><graphs><graph><uuid>c76cf8ec6a584af6be815ec4a9257a8c</uuid><name>Azure PostgreSQL: Connections</name><graph_items><graph_item><color>1A7C11</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.connections.active</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.connections.failed</key></item></graph_item></graph_items></graph><graph><uuid>8bc17d843775414ea971e640e1fe5ec0</uuid><name>Azure PostgreSQL: Network traffic</name><graph_items><graph_item><color>1A7C11</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.network.egress</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.network.ingress</key></item></graph_item></graph_items></graph><graph><uuid>9e750a5a462b4429ac5a36a72bd60c66</uuid><name>Azure PostgreSQL: Server log storage utilization</name><graph_items><graph_item><color>1A7C11</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.storage.server.log.used</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.storage.server.log.limit</key></item></graph_item></graph_items></graph><graph><uuid>9ecd071a77364c4486fa5f63125cd985</uuid><name>Azure PostgreSQL: Storage utilization</name><graph_items><graph_item><color>1A7C11</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.storage.used</key></item></graph_item><graph_item><sortorder>1</sortorder><color>2774A4</color><item><host>Azure PostgreSQL single server by HTTP</host><key>azure.db.pgsql.storage.limit</key></item></graph_item></graph_items></graph></graphs></zabbix_export>
